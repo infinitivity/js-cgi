@@ -1,5 +1,5 @@
 # js-cgi  - Javascript CGI process manager
-js-cgi is a javascript CGI process manager, similar to php-fpm, for executing node.js or io.js compatible scripts behind NGINX or Apache.
+js-cgi is a javascript CGI process manager, similar to php-fpm, for executing node.js/io.js compatible scripts behind NGINX or Apache. Comes in handy if you want to run PHP along side node.js/io.js or if you don't want to write your own web server into your node.js/io.js application.
 
 This is experimental and not production ready!
 
