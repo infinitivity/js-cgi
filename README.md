@@ -19,11 +19,11 @@ module.exports = {
 
 ```
 
-port - Indicates which TCP port to listen on. default=3000.
+port - Indicates which TCP port to listen on. default=3000
 
-localhostOnly - Prevents non-local agents from invoking scripts. default=true.
+localhostOnly - Prevents non-local agents from invoking scripts. default=true
 
-workers - Number of process workers. default=2
+workers - Number of worker processes. default=2
 ####Usage:
 ```sh
 node js-cgi.js
