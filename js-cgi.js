@@ -111,12 +111,13 @@ function handleRequest(req, res) {
   }
   console.log('file_path:'+file_path);
 
-  //If the requested fil exists...
+  //If the requested file exists...
   fs.exists(file_path, function(exists){
     if(exists){
       fs.readFile(file_path, function (err, source) {
         if(err){
           //Error reading file
+          console.log(err, err.stack);
           res.writeHead(500, err);
           res.end(err.toString());
         }
@@ -138,7 +139,7 @@ function handleRequest(req, res) {
           script.runInNewContext(sandbox);
 
         }catch(err){
-          console.log(err);
+          console.log(err, err.stack);
           res.writeHead(500);
           res.end(err.toString());
         }
