@@ -14,7 +14,7 @@ Example:
 module.exports = {
    port:3000,
    localhostOnly:true,
-   	workers:2
+   workers:2
 };
 
 ```
@@ -25,7 +25,7 @@ localhostOnly - Prevents non-local agents from invoking scripts. default=true
 
 workers - Number of worker processes. default=2
 ####Usage:
-Add a directive to your `nginx.conf` file. I use the njs extension instead of js so NGINX won't confuse browser javascript files with server javascript files.
+Add a directive to your `nginx.conf` file. I use an "njs" extension on the server javascript files instead of a "js" extension so NGINX won't confuse them with browser javascript files.
 ```
 location ~ [^/]\.njs(/|$) {
    proxy_pass   http://localhost:3000;
