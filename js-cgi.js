@@ -125,6 +125,7 @@ function handleRequest(req, res) {
           //console.log('filename:'+file_path);
 
           var script = vm.createScript('try{\n'+source+'\n}catch(err){console.log(err, JSON.stringify(err.stack));res.writeHead(500);res.end(err.toString());}');
+          console.log(globals);
           var sandbox = {
                   globals: globals,
                   console: console,
