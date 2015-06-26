@@ -36,6 +36,7 @@ location ~ [^/]\.njs(/|$) {
    proxy_set_header path_translated $document_root$fastcgi_path_info;
 }
 ```
+Once you configure and restart NGINX, you can start js-cgi.
 ```sh
 node js-cgi.js
 ```
