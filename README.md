@@ -17,6 +17,9 @@ module.exports = {
 			};
 
 ```
-port - Indicates which TCP port to listen on. default=3000
-localhostOnly - Prevents non-local agents from invoking scripts. default=true,
+
+port - Indicates which TCP port to listen on. default=3000.
+
+localhostOnly - Prevents non-local agents from invoking scripts. default=true.
+
 workers - Number of process workers. default=2
