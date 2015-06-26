@@ -1,51 +1,51 @@
 /**/
 var cluster = require('cluster'),
-	url = require('url'),
-	fs = require('fs'),
-	vm = require('vm'),
-	path = require('path'),
-	express = require('express'),
-	app = express(),
-	config_name = 'js-cgi.config',
-	config,
-	globals = {},
-	error = function(err) {
-  		console.log('Error:'+err);
-	};
+  url = require('url'),
+  fs = require('fs'),
+  vm = require('vm'),
+  path = require('path'),
+  express = require('express'),
+  app = express(),
+  config_name = 'js-cgi.config',
+  config,
+  globals = {},
+  error = function(err) {
+      console.log('Error:'+err);
+  };
 
 if(fs.existsSync(path.join(__dirname, config_name))){
-	//Load the congfig file
-	console.log('Loading '+config_name+'...');
-	config = require('./'+config_name);
+  //Load the congfig file
+  console.log('Loading '+config_name+'...');
+  config = require('./'+config_name);
 }else{
-	//Use the default congfig
-	console.log('Loading default config...');
-	config = 
-		{
-			port:3000,
-			localhostOnly:true,
-			workers:2
-		};
+  //Use the default congfig
+  console.log('Loading default config...');
+  config =
+    {
+      port:3000,
+      localhostOnly:true,
+      workers:2
+    };
 }
 
 if (cluster.isMaster) {
   cluster.fork();//At least one worker is required.
   var w;
   for(w = 2; w <= config.workers;w++){
-  	cluster.fork().on('error', error);
+    cluster.fork().on('error', error);
   }
- 
+
   cluster.on('disconnect', function(worker) {
     console.error('disconnect!');
     cluster.fork().on('error', error);
   });
 } else {
   // the worker
-  var domain = require('domain')
-  	server;
+  var domain = require('domain'),
+    server;
 
   //var server = require('http').createServer(function(req, res) {
-  
+
     var d = domain.create();
     d.on('error', function(er) {
       console.error('error', er.stack);
@@ -78,73 +78,75 @@ if (cluster.isMaster) {
 
     // Now run the handler function in the domain.
     d.run(function() {
-    	console.log('Listening on '+config.port);
-    	server = app.listen(config.port);
+      console.log('Listening on '+config.port);
+      server = app.listen(config.port);
 
-    	app.all('*', function(req, res){
-    		console.log('req');
-  		handleRequest(req, res);
-	});
-		
+      app.all('*', function(req, res){
+        console.log('req');
+        handleRequest(req, res);
+      });
     });
 }
 
 function handleRequest(req, res) {
-	var url_obj = url.parse(req.url, true);
-	/*if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
-		//res.writeHead(401);
-		res.end(401);
-	}*/
+  var url_obj = url.parse(req.url, true);
+  /*if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
+    //res.writeHead(401);
+    res.end(401);
+  }*/
 
-	function resolveModule(module) {
-		if (module.charAt(0) !== '.'){ 
-			//console.log('No need to resolve '+module);
-			return module;
-		}
-		//console.log('Resolved '+module+' to '+path.resolve(path.dirname(file_path), module));
-		return path.resolve(path.dirname(file_path), module);
-	}
-	if(req.headers.path_translated && url_obj.pathname){
-		var file_path = req.headers.path_translated+url_obj.pathname;
-	}else{
-		var file_path = url_obj.pathname;
-	}
-	console.log('file_path:'+file_path);
-	fs.exists(file_path, function(exists){
-		if(exists){
-			fs.readFile(file_path, function (err, source) {
-				if(err){
-					//Error reading file
-					res.writeHead(500, err);
-					res.end(err.toString());
-				}
-				try{
-					//console.log('filename:'+file_path);
+  function resolveModule(module) {
+    if (module.charAt(0) !== '.'){
+      //console.log('No need to resolve '+module);
+      return module;
+    }
+    //console.log('Resolved '+module+' to '+path.resolve(path.dirname(file_path), module));
+    return path.resolve(path.dirname(file_path), module);
+  }
+  var file_path;
+  if(req.headers.path_translated && url_obj.pathname){
+    file_path = req.headers.path_translated+url_obj.pathname;
+  }else{
+    file_path = url_obj.pathname;
+  }
+  console.log('file_path:'+file_path);
 
-					var script = vm.createScript(source);
-					var sandbox = {
-									globals: globals,
-									console: console,
-									require: function(name) {
-       	    							return require(resolveModule(name));
-       								},
-								req: req,
-								res: res,
-								displayErrors: true
-						};
-						
-					script.runInNewContext(sandbox);
-				
-				}catch(err){
-					console.log(err);
-					res.writeHead(500);
-					res.end(err.toString());
-				}
-			});
-		}else{
-			//File does not exist
-			res.writeHead(404, 'File not found.');
-			res.end('File not found.');
-		}
-	});
+  //If the requested fil exists...
+  fs.exists(file_path, function(exists){
+    if(exists){
+      fs.readFile(file_path, function (err, source) {
+        if(err){
+          //Error reading file
+          res.writeHead(500, err);
+          res.end(err.toString());
+        }
+        try{
+          //console.log('filename:'+file_path);
+
+          var script = vm.createScript(source);
+          var sandbox = {
+                  globals: globals,
+                  console: console,
+                  require: function(name) {
+                           return require(resolveModule(name));
+                       },
+                req: req,
+                res: res,
+                displayErrors: true
+            };
+
+          script.runInNewContext(sandbox);
+
+        }catch(err){
+          console.log(err);
+          res.writeHead(500);
+          res.end(err.toString());
+        }
+      });
+    }else{
+      //File does not exist
+      res.writeHead(404, 'File not found.');
+      res.end('File not found.');
+    }
+  });
 }
