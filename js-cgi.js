@@ -7,7 +7,7 @@ var cluster = require('cluster'),
 	path = require('path'),
 	express = require('express'),
 	app = express(),
-	config_name = 'nodejs-cgi.config'
+	config_name = 'js-cgi.config'
 	globals = {};
 	
 if(fs.existsSync(path.join(__dirname, config_name))){
@@ -23,7 +23,7 @@ if(fs.existsSync(path.join(__dirname, config_name))){
 	}
 
 error =  function(err) {
-  	console.log('Some bad stuff happened.');
+  	console.log('Error:'+err);
 };
 if (cluster.isMaster) {
   // In real life, you'd probably use more than just 2 workers,
