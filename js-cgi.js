@@ -1,99 +1,103 @@
-
-/**/
+/*Darrel Kathan*/
 var cluster = require('cluster'),
-  url = require('url'),
-  fs = require('fs'),
-  vm = require('vm'),
-  path = require('path'),
-  express = require('express'),
-  app = express(),
-  config_name = 'js-cgi.config',
-  config,
-  error = function(err) {
-      console.log('Error:'+err);
-  };
-	
-
+	url = require('url'),
+	fs = require('fs'),
+	vm = require('vm'),
+	os = require('os'),
+	util = require('util'),
+	path = require('path'),
+	express = require('express'),
+	cookieParser = require('cookie-parser'),
+	app = express(),
+	config_name = 'js-cgi.config',
+	config,
+	lconsole = {
+		log:function(msg){
+			util.log('('+process.pid+'): '+msg);
+		},
+		error:function(msg, stack){
+			util.error('('+process.pid+'): '+msg, stack);
+		}
+	},
+	error = function(err) {
+		lconsole.error('Error:'+err);
+	};
+  
+app.use(cookieParser());
 
 if(fs.existsSync(path.join(__dirname, config_name))){
-  //Load the congfig file
-  console.log('Loading '+config_name+'...');
-  config = require('./'+config_name);
+	//Load the congfig file
+	lconsole.log('Loading '+config_name+'...');
+	config = require('./'+config_name);
 }else{
-  //Use the default congfig
-  console.log('Loading default config...');
-  config =
-    {
-      port:3000,
-      localhostOnly:true,
-      workers:2,
-      timeout:30000
-    };
+	//Use the default congfig
+	lconsole.log('Loading default config...');
+	config = {
+		port:3000,
+		localhostOnly:true,
+		//workers:2,
+		timeout:30000
+	};
+	config.workers = (os.cpus().length/2)-1;//For some reason cpus.length is reports twice as many cores than actual.
 }
+
 
 if (cluster.isMaster) {
 	cluster.globals = {};
-  cluster.fork();//At least one worker is required.
-  var w;
-  for(w = 2; w <= config.workers;w++){
-    cluster.fork().on('error', error);
-  }
+	cluster.fork();//At least one worker is required.
+	
+	for(var w = 2; w <= config.workers;w++){
+		cluster.fork().on('error', error);
+	}
 
-  cluster.on('disconnect', function(worker) {
-    console.error('disconnect!');
-    cluster.fork().on('error', error);
-  });
+	cluster.on('disconnect', function(worker) {
+		lconsole.error('disconnect!');
+		cluster.fork().on('error', error);
+	});
 } else {
-  // the worker
-  var domain = require('domain'),
-    server;
+	// the worker
+	var domain = require('domain'),
+		server,
+		d = domain.create();
 
-  //var server = require('http').createServer(function(req, res) {
+	d.on('error', function(er) {
+		lconsole.error('error', er.stack);
+		try {
+			// make sure we close down if it times out
+			var killtimer = setTimeout(function() {
+				lconsole.error('Killing process. Timeout expired ('+config.timeout+' ms)');
+				return process.exit(1);
+			}, config.timeout);
+			// But don't keep the process open just for that!
+			killtimer.unref();
 
-    var d = domain.create();
-    d.on('error', function(er) {
-      console.error('error', er.stack);
-      try {
-        // make sure we close down if it times out
-        var killtimer = setTimeout(function() {
-        	console.error('Killing process. Timeout expired ('+config.timeout+')');
-          process.exit(1);
-        }, config.timeout);
-        // But don't keep the process open just for that!
-        killtimer.unref();
+			// stop taking new requests.
+			server.close();
 
-        // stop taking new requests.
-        server.close();
-
-        // Let the master know we're dead.  This will trigger a
-        // 'disconnect' in the cluster master, and then it will fork
-        // a new worker.
-        cluster.worker.disconnect();
-
-        // try to send an error to the request that triggered the problem
-        //res.statusCode = 500;
-        //res.setHeader('content-type', 'text/plain');
-        //res.end('Oops, there was a problem!\n');
-      } catch (er2) {
-        // oh well, not much we can do at this point.
-        console.error('Error sending 500!', er2.stack);
-        //res.end(er2.toString());
-      }
-    });
+			// Let the master know we're dead.  This will trigger a
+			// 'disconnect' in the cluster master, and then it will fork
+			// a new worker.
+			cluster.worker.disconnect();
+		} catch (er2) {
+			// oh well, not much we can do at this point.
+			lconsole.error(er2.stack);
+		}
+	});
 
     // Now run the handler function in the domain.
     d.run(function() {
-      console.log('Listening on '+config.port);
-      server = app.listen(config.port);
+		lconsole.log('Listening on '+config.port);
+      
+		server = app.listen(config.port);
 
-      app.all('*', function(req, res){
-        //console.log('req');
-        handleRequest(req, res);
-      });
-    });
+		app.all('*', function(req, res){
+			//console.log('req');
+			return handleRequest(req, res);
+		});
+	});
 }
 
-function handleRequest(req, res) {
+function handleRequestScript(req, res) {
   var url_obj = url.parse(req.url, true);
   /*if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
     //res.writeHead(401);
@@ -119,6 +123,7 @@ function handleRequest(req, res) {
   function myRequire(name) {
     return require(resolveModule(name));
   }
+  
   //If the requested file exists...
   fs.exists(file_path, function(exists){
     if(exists){
@@ -132,10 +137,12 @@ function handleRequest(req, res) {
 	      	//console.log(process.cwd());
 	      	var script = Function('req', 'res', 'globals', 'require', content);
 	      	//console.log(script.toString());
+	      	lconsole.log(file_path);
 	      	script(req, res, cluster.globals, myRequire);
+	      	
 	      }catch(err){
 	      	res.writeHead(500);
-	      	console.error(err.stack)
+	      	lconsole.error(err.stack)
 	      	res.end(err+' in '+file_path);
 	      }
 	    });
@@ -169,18 +176,17 @@ function handleRequestRequire(req, res) {
       	script(req, res, cluster.globals);
       }else{
       	res.writeHead(500);
-      	res.end('Script is not configured correctly.');
+      	return res.send('Script is not configured correctly.');
       }
     }else{
       //File does not exist
       res.writeHead(404, 'File not found.');
-      res.end('File '+file_path+' not found.');
+      return res.send('File '+file_path+' not found.');
     }
   });
 }
 
-//==== Old ====
-function handleRequestSafe(req, res) {
+function handleRequestRIC(req, res) {
   var url_obj = url.parse(req.url, true);
   /*if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
     //res.writeHead(401);
@@ -208,18 +214,18 @@ function handleRequestSafe(req, res) {
       fs.readFile(file_path, function (err, source) {
         if(err){
           //Error reading file
-          console.error(err, err.stack);
+          lconsole.error(err, err.stack);
           res.writeHead(500, err);
-          res.end(err.toString());
+          return res.send(err.toString());
         }
         try{
           //console.log('filename:'+file_path);
 
           var script = vm.createScript('try{\n'+source+'\n}catch(err){console.error(err, err.stack);res.writeHead(500);res.end(err.toString());}');
-          //my_console.log('pre execute:'+g);
+          //console.log('pre execute:'+g);
           var sandbox = {
-                  globals: globals,
-                  console: my_console,
+                  //globals: globals,
+                  console: lconsole,
                   require: function(name) {
                            return require(resolveModule(name));
                        },
@@ -228,29 +234,82 @@ function handleRequestSafe(req, res) {
                 displayErrors: true
             };
 
-          script.runInNewContext(sandbox);
+          return script.runInNewContext(sandbox);
 
         }catch(err){
-          console.error(err, err.stack);
+          lconsole.error(err, err.stack);
           res.writeHead(500);
-          res.end(err.toString());
+          return res.send(err.toString());
         }
       });
     }else{
       //File does not exist
       res.writeHead(404, 'File not found.');
-      res.end('File not found.');
+      return res.send('File not found.');
     }
   });
 }
 
-var my_console = {
-  log:function(msg){
-    var d = new Date();
-    console.log(d.toString()+': '+msg);
-  },
-  error:function(msg, stack){
-    var d = new Date();
-    console.error(d.toString()+': '+msg, stack);
-  }
+function handleRequest(req, res) {
+	var url_obj = url.parse(req.url, true),
+		file_path;
+	/*if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
+		//res.writeHead(401);
+		res.end(401);
+	}*/
+
+	if(req.headers.path_translated && url_obj.pathname){
+		file_path = req.headers.path_translated+url_obj.pathname;
+	}else{
+		file_path = url_obj.pathname;
+	}
+
+	//console.log('file_path:'+file_path);
+	function resolveModule(module) {
+		if (module.charAt(0) !== '.'){
+			//console.log('No need to resolve '+module);
+			return module;
+		}
+		//console.log('Resolved '+module+' to '+path.resolve(path.dirname(file_path), module));
+		return path.resolve(path.dirname(file_path), module);
+	}
+
+	//If the requested file exists...
+	fs.exists(file_path, function(exists){
+		if(exists){
+			fs.readFile(file_path, function (err, source) {
+				if(err){
+					//Error reading file
+					lconsole.error(err, err.stack);
+					res.writeHead(500, err);
+					return res.send(err.toString());
+				}
+				try{
+					lconsole.log('Request: '+file_path);
+
+					var sandbox = {
+						//globals: globals,
+						console: lconsole,
+						setImmediate: setImmediate,
+						require: function(name) {
+							return require(resolveModule(name));
+						},
+						req: req,
+						res: res
+					};
+					var c = vm.createContext(sandbox);
+            	
+					return vm.runInContext(source, c, {displayErrors: true});
+				}catch(err){
+					lconsole.error(err, err.stack);
+					//res.writeHead(500);
+					return res.status(500).send(err.toString());
+				}
+			});
+		}else{
+			//File does not exist
+			//res.writeHead(404, 'File not found.');
+			return res.status(404).send('File not found.');
+		}
+	});
 }
