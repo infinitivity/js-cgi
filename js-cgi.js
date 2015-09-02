@@ -10,13 +10,21 @@ var cluster = require('cluster'),
 	cookieParser = require('cookie-parser'),
 	app = express(),
 	config_name = 'js-cgi.config',
-	config,
+	config = {},
 	lconsole = {
-		log:function(msg){
-			util.log('('+process.pid+'): '+msg);
+		log: function(msg){
+			var log_msg = '('+process.pid+'): '+msg;
+			util.log(log_msg);
+			if(config.output_log){
+				fs.appendFile(config.output_log, log_msg+'\n', function(){});
+			}
 		},
-		error:function(msg, stack){
-			util.error('('+process.pid+'): '+msg, stack);
+		error: function(msg, stack){
+			var log_msg = '('+process.pid+'): '+msg;
+			util.error(log_msg, stack);
+			if(config.output_log){
+				fs.appendFile(config.output_log, log_msg+'\n', function(){});
+			}
 		}
 	},
 	error = function(err) {
@@ -24,7 +32,10 @@ var cluster = require('cluster'),
 	};
   
 app.use(cookieParser());
+app.set('json spaces', 4);
 
+config.output_log = path.dirname(process.argv[1])+'/js-cgi.log';
+//console.log(config.output_log);
 if(fs.existsSync(path.join(__dirname, config_name))){
 	//Load the congfig file
 	lconsole.log('Loading '+config_name+'...');
@@ -32,12 +43,10 @@ if(fs.existsSync(path.join(__dirname, config_name))){
 }else{
 	//Use the default congfig
 	lconsole.log('Loading default config...');
-	config = {
-		port:3000,
-		localhostOnly:true,
-		//workers:2,
-		timeout:30000
-	};
+	config.port = 3000;
+	config.localhostOnly = true;
+	//config.workers = 2;
+	config.timeout = 30000;
 	config.workers = (os.cpus().length/2)-1;//For some reason cpus.length is reports twice as many cores than actual.
 }
 
@@ -95,6 +104,16 @@ if (cluster.isMaster) {
 			return handleRequest(req, res);
 		});
 	});
+}
+
+function clearRequiredCache(name){
+	
+}
+
+function setRequiredCacheTimestamp(name){
+	if(require.cache[process.execPath][name]){
+		return require.cache[process.execPath][name];
+	}
 }
 
 function handleRequestScript(req, res) {
@@ -286,7 +305,7 @@ function handleRequest(req, res) {
 				}
 				try{
 					lconsole.log('Request: '+file_path);
-
+					//console.log(require.cache);
 					var sandbox = {
 						//globals: globals,
 						console: lconsole,
