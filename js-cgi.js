@@ -8,6 +8,8 @@ var cluster = require('cluster'),
 	path = require('path'),
 	express = require('express'),
 	cookieParser = require('cookie-parser'),
+	bodyParser = require('body-parser'),
+	multer = require('multer'),
 	app = express(),
 	config_name = 'js-cgi.config',
 	config = {},
@@ -30,7 +32,11 @@ var cluster = require('cluster'),
 	error = function(err) {
 		lconsole.error('Error:'+err);
 	};
-  
+
+/*TODO - These should be optional features that are added via a startup script*/
+app.use(bodyParser.urlencoded({ extended: false })); // for parsing application/x-www-form-urlencoded
+app.use(bodyParser.json()); // for parsing application/json
+//app.use(multer()); // for parsing multipart/form-data
 app.use(cookieParser());
 app.set('json spaces', 4);
 
