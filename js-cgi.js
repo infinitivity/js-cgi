@@ -12,6 +12,8 @@ var cluster = require('cluster'),
 	watch = WatchJS.watch,
 	express = require('express'),
 	cookieParser = require('cookie-parser'),
+	bodyParser = require('body-parser'),
+	multer = require('multer'),
 	app = express(),
 	config_name = 'js-cgi.config',
 	config = {},
@@ -19,6 +21,7 @@ var cluster = require('cluster'),
 		console.error('Error:'+err);
 	};
 
+<<<<<<< HEAD
 /* Override console.log to write messages to log file. */
 console.log = function(){
 	var d = new Date(),
@@ -63,6 +66,12 @@ console.error = function(msg, stack){
 	}
 });*/
 
+=======
+/*TODO - These should be optional features that are added via a startup script*/
+app.use(bodyParser.urlencoded({ extended: false })); // for parsing application/x-www-form-urlencoded
+app.use(bodyParser.json()); // for parsing application/json
+//app.use(multer()); // for parsing multipart/form-data
+>>>>>>> 0f83c57621c958611598790f1478982b2a8abbb9
 app.use(cookieParser());
 app.set('json spaces', 4);
 
