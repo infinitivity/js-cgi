@@ -1,4 +1,6 @@
 /*Darrel Kathan*/
+'use strict';
+
 var cluster = require('cluster'),
 	url = require('url'),
 	fs = require('fs'),
@@ -6,31 +8,61 @@ var cluster = require('cluster'),
 	os = require('os'),
 	util = require('util'),
 	path = require('path'),
+	WatchJS = require('watchjs'),
+	watch = WatchJS.watch,
 	express = require('express'),
 	cookieParser = require('cookie-parser'),
 	app = express(),
 	config_name = 'js-cgi.config',
 	config = {},
-	lconsole = {
-		log: function(msg){
-			var log_msg = '('+process.pid+'): '+msg;
-			util.log(log_msg);
-			if(config.output_log){
-				fs.appendFile(config.output_log, log_msg+'\n', function(){});
-			}
-		},
-		error: function(msg, stack){
-			var log_msg = '('+process.pid+'): '+msg;
-			util.error(log_msg, stack);
-			if(config.output_log){
-				fs.appendFile(config.output_log, log_msg+'\n', function(){});
-			}
-		}
-	},
 	error = function(err) {
-		lconsole.error('Error:'+err);
+		console.error('Error:'+err);
 	};
-  
+
+/* Override console.log to write messages to log file. */
+console.log = function(){
+	var d = new Date(),
+		log_msg = d.toString()+' - ('+process.pid+'): ',
+		stack = new Error().stack;
+		
+	this._stdout.write(log_msg + util.format.apply(this, arguments) + stack + '\n');
+	if(config.output_log){
+		fs.appendFile(config.output_log, log_msg + util.format.apply(this, arguments) + '\n', function(){return;});
+	}
+};
+
+console.error = function(msg, stack){
+	var d = new Date(),
+		log_msg = d.toString()+' - ('+process.pid+'): '+msg;
+	util.error(log_msg, stack);
+	if(config.output_log){
+		fs.appendFile(config.output_log, log_msg+'\n', function(){});
+		fs.appendFile(config.output_log, stack+'\n', function(){return;});
+	}
+};	
+
+/*Watch all current required files*/
+//console.log(Module);
+
+/*for(var i in module.require){
+	console.log(i);
+	//watchRequired(i);
+}*/
+
+
+/*Apply watcher to require.cache object */
+/*watch(require, 'cache', function(prop, action, newvalue, oldvalue){
+	WatchJS.noMore = true; 
+	var newvalue_str = '';
+	for(var i in newvalue[0]){
+		newvalue_str += i+': '+newvalue[0][i]+', ';
+	}
+	if(prop === 'children'){
+		watchRequired(newvalue[0].id);
+		//console.log('prop:'+prop+', action:'+action+', newvalue:'+newvalue_str);
+	}
+});*/
+
 app.use(cookieParser());
 app.set('json spaces', 4);
 
@@ -38,11 +70,11 @@ config.output_log = path.dirname(process.argv[1])+'/js-cgi.log';
 //console.log(config.output_log);
 if(fs.existsSync(path.join(__dirname, config_name))){
 	//Load the congfig file
-	lconsole.log('Loading '+config_name+'...');
+	console.log('Loading '+config_name+'...');
 	config = require('./'+config_name);
 }else{
 	//Use the default congfig
-	lconsole.log('Loading default config...');
+	console.log('Loading default config...');
 	config.port = 3000;
 	config.localhostOnly = true;
 	//config.workers = 2;
@@ -50,6 +82,90 @@ if(fs.existsSync(path.join(__dirname, config_name))){
 	config.workers = (os.cpus().length/2)-1;//For some reason cpus.length is reports twice as many cores than actual.
 }
 
+var assert = require('assert').ok,
+	Module = require('module');
+if(typeof Module._watching !== 'object'){
+	Module._watching = {};
+}
+function watchRequired(fn){
+	/*var fs = require('fs')
+		console = console;*/
+	//console.log(fn);
+	if(Module._watching && !Module._watching.hasOwnProperty(fn)){
+		if(fs.existsSync(fn)){
+			console.log('Watching '+fn);
+			Module._watching[fn] = fs.watch(fn, function(event,f){
+			//Module._watching[fn] = fs.watchFile(fn, function(curr, prev){
+				console.log(fn, event);
+				
+				if(Module._cache.hasOwnProperty(fn)){
+					console.log('Expiring '+fn);
+					return delete Module._cache[fn];
+					//fs.unwatch(fn, function(){return;});
+				}
+				return;
+			});
+		}
+	}
+}
+
+/*Module._load = function(request, parent, isMain) {
+  if (parent) {
+    //debug('Module._load REQUEST  ' + (request) + ' parent: ' + parent.id);
+  }
+
+  // REPL is a special case, because it needs the real require.
+  if (request === 'internal/repl' || request === 'repl') {
+    if (Module._cache[request]) {
+      return Module._cache[request];
+    }
+    var replModule = new Module(request);
+    replModule._compile(NativeModule.getSource(request), '${request}.js');
+    NativeModule._cache[request] = replModule;
+    return replModule.exports;
+  }
+
+  var filename = Module._resolveFilename(request, parent);
+
+  var cachedModule = Module._cache[filename];
+  if (cachedModule) {
+    return cachedModule.exports;
+  }
+
+  if (NativeModule.nonInternalExists(filename)) {
+    //debug('load native module ' + request);
+    return NativeModule.require(filename);
+  }
+
+  var module = new Module(filename, parent);
+
+  if (isMain) {
+    process.mainModule = module;
+    module.id = '.';
+  }
+
+  Module._cache[filename] = module;
+  watchRequired(filename);
+
+  var hadException = true;
+
+  try {
+    module.load(filename);
+    hadException = false;
+  } finally {
+    if (hadException) {
+      delete Module._cache[filename];
+    }
+  }
+
+  return module.exports;
+};*/
+Module.prototype.require = function(path) {
+  assert(path, 'missing path');
+  assert((typeof path === 'string'), 'path must be a string');
+  watchRequired(Module._resolveFilename(path, this));
+  return Module._load(path, this);
+};
 
 if (cluster.isMaster) {
 	cluster.globals = {};
@@ -60,7 +176,7 @@ if (cluster.isMaster) {
 	}
 
 	cluster.on('disconnect', function(worker) {
-		lconsole.error('disconnect!');
+		console.error('disconnect!');
 		cluster.fork().on('error', error);
 	});
 } else {
@@ -70,11 +186,11 @@ if (cluster.isMaster) {
 		d = domain.create();
 
 	d.on('error', function(er) {
-		lconsole.error('error', er.stack);
+		console.error('error', er.stack);
 		try {
 			// make sure we close down if it times out
 			var killtimer = setTimeout(function() {
-				lconsole.error('Killing process. Timeout expired ('+config.timeout+' ms)');
+				console.error('Killing process. Timeout expired ('+config.timeout+' ms)');
 				return process.exit(1);
 			}, config.timeout);
 			// But don't keep the process open just for that!
@@ -89,13 +205,13 @@ if (cluster.isMaster) {
 			cluster.worker.disconnect();
 		} catch (er2) {
 			// oh well, not much we can do at this point.
-			lconsole.error(er2.stack);
+			console.error(er2.stack);
 		}
 	});
 
     // Now run the handler function in the domain.
     d.run(function() {
-		lconsole.log('Listening on '+config.port);
+		console.log('Listening on '+config.port);
       
 		server = app.listen(config.port);
 
@@ -156,12 +272,12 @@ function handleRequestScript(req, res) {
 	      	//console.log(process.cwd());
 	      	var script = Function('req', 'res', 'globals', 'require', content);
 	      	//console.log(script.toString());
-	      	lconsole.log(file_path);
+	      	console.log(file_path);
 	      	script(req, res, cluster.globals, myRequire);
 	      	
 	      }catch(err){
 	      	res.writeHead(500);
-	      	lconsole.error(err.stack)
+	      	console.error(err.stack)
 	      	res.end(err+' in '+file_path);
 	      }
 	    });
@@ -233,18 +349,19 @@ function handleRequestRIC(req, res) {
       fs.readFile(file_path, function (err, source) {
         if(err){
           //Error reading file
-          lconsole.error(err, err.stack);
+          console.error(err, err.stack);
           res.writeHead(500, err);
           return res.send(err.toString());
         }
         try{
           //console.log('filename:'+file_path);
 
-          var script = vm.createScript('try{\n'+source+'\n}catch(err){console.error(err, err.stack);res.writeHead(500);res.end(err.toString());}');
+          //var script = vm.createScript('try{\n'+source+'\n}catch(err){console.error(err, err.stack);res.writeHead(500);res.end(err.toString());}');
+          var script = vm.createScript(source);
           //console.log('pre execute:'+g);
           var sandbox = {
                   //globals: globals,
-                  console: lconsole,
+                  console: console,
                   require: function(name) {
                            return require(resolveModule(name));
                        },
@@ -256,7 +373,7 @@ function handleRequestRIC(req, res) {
           return script.runInNewContext(sandbox);
 
         }catch(err){
-          lconsole.error(err, err.stack);
+          console.error(err, err.stack);
           res.writeHead(500);
           return res.send(err.toString());
         }
@@ -299,19 +416,21 @@ function handleRequest(req, res) {
 			fs.readFile(file_path, function (err, source) {
 				if(err){
 					//Error reading file
-					lconsole.error(err, err.stack);
+					console.error(err, err.stack);
 					res.writeHead(500, err);
 					return res.send(err.toString());
 				}
 				try{
-					lconsole.log('Request: '+file_path);
+					console.log('Request: '+file_path);
 					//console.log(require.cache);
 					var sandbox = {
 						//globals: globals,
-						console: lconsole,
+						console: console,
 						setImmediate: setImmediate,
 						require: function(name) {
-							return require(resolveModule(name));
+							var mod_path = resolveModule(name);
+							//watchRequired(mod_path);
+							return require(mod_path);
 						},
 						req: req,
 						res: res
@@ -320,7 +439,7 @@ function handleRequest(req, res) {
             	
 					return vm.runInContext(source, c, {displayErrors: true});
 				}catch(err){
-					lconsole.error(err, err.stack);
+					console.error(err, err.stack);
 					//res.writeHead(500);
 					return res.status(500).send(err.toString());
 				}
