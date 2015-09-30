@@ -5,6 +5,7 @@ This is experimental and not production ready!
 
 ####Dependencies:
 express.js
+cookie-parser
 
 ####Configuration:
 On startup, js-cgi will look for a config file called `js-cgi.config` in the same folder as the js-cgi.js file. If it's not found it will use the defaults.

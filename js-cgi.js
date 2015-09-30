@@ -8,12 +8,8 @@ var cluster = require('cluster'),
 	os = require('os'),
 	util = require('util'),
 	path = require('path'),
-	WatchJS = require('watchjs'),
-	watch = WatchJS.watch,
 	express = require('express'),
 	cookieParser = require('cookie-parser'),
-	bodyParser = require('body-parser'),
-	multer = require('multer'),
 	app = express(),
 	config_name = 'js-cgi.config',
 	config = {},
@@ -21,7 +17,6 @@ var cluster = require('cluster'),
 		console.error('Error:'+err);
 	};
 
-<<<<<<< HEAD
 /* Override console.log to write messages to log file. */
 console.log = function(){
 	var d = new Date(),
@@ -42,36 +37,8 @@ console.error = function(msg, stack){
 		fs.appendFile(config.output_log, log_msg+'\n', function(){});
 		fs.appendFile(config.output_log, stack+'\n', function(){return;});
 	}
-};	
+};
 
-/*Watch all current required files*/
-//console.log(Module);
-
-/*for(var i in module.require){
-	console.log(i);
-	//watchRequired(i);
-}*/
-
-
-/*Apply watcher to require.cache object */
-/*watch(require, 'cache', function(prop, action, newvalue, oldvalue){
-	WatchJS.noMore = true; 
-	var newvalue_str = '';
-	for(var i in newvalue[0]){
-		newvalue_str += i+': '+newvalue[0][i]+', ';
-	}
-	if(prop === 'children'){
-		watchRequired(newvalue[0].id);
-		//console.log('prop:'+prop+', action:'+action+', newvalue:'+newvalue_str);
-	}
-});*/
-
-=======
-/*TODO - These should be optional features that are added via a startup script*/
-app.use(bodyParser.urlencoded({ extended: false })); // for parsing application/x-www-form-urlencoded
-app.use(bodyParser.json()); // for parsing application/json
-//app.use(multer()); // for parsing multipart/form-data
->>>>>>> 0f83c57621c958611598790f1478982b2a8abbb9
 app.use(cookieParser());
 app.set('json spaces', 4);
 
@@ -91,6 +58,7 @@ if(fs.existsSync(path.join(__dirname, config_name))){
 	config.workers = (os.cpus().length/2)-1;//For some reason cpus.length is reports twice as many cores than actual.
 }
 
+/* Override the "require" function to watch if required files have change and expire them from cache when they do*/
 var assert = require('assert').ok,
 	Module = require('module');
 if(typeof Module._watching !== 'object'){
@@ -118,57 +86,6 @@ function watchRequired(fn){
 	}
 }
 
-/*Module._load = function(request, parent, isMain) {
-  if (parent) {
-    //debug('Module._load REQUEST  ' + (request) + ' parent: ' + parent.id);
-  }
-
-  // REPL is a special case, because it needs the real require.
-  if (request === 'internal/repl' || request === 'repl') {
-    if (Module._cache[request]) {
-      return Module._cache[request];
-    }
-    var replModule = new Module(request);
-    replModule._compile(NativeModule.getSource(request), '${request}.js');
-    NativeModule._cache[request] = replModule;
-    return replModule.exports;
-  }
-
-  var filename = Module._resolveFilename(request, parent);
-
-  var cachedModule = Module._cache[filename];
-  if (cachedModule) {
-    return cachedModule.exports;
-  }
-
-  if (NativeModule.nonInternalExists(filename)) {
-    //debug('load native module ' + request);
-    return NativeModule.require(filename);
-  }
-
-  var module = new Module(filename, parent);
-
-  if (isMain) {
-    process.mainModule = module;
-    module.id = '.';
-  }
-
-  Module._cache[filename] = module;
-  watchRequired(filename);
-
-  var hadException = true;
-
-  try {
-    module.load(filename);
-    hadException = false;
-  } finally {
-    if (hadException) {
-      delete Module._cache[filename];
-    }
-  }
-
-  return module.exports;
-};*/
 Module.prototype.require = function(path) {
   assert(path, 'missing path');
   assert((typeof path === 'string'), 'path must be a string');
@@ -176,6 +93,7 @@ Module.prototype.require = function(path) {
   return Module._load(path, this);
 };
 
+/* Start up the server node */
 if (cluster.isMaster) {
 	cluster.globals = {};
 	cluster.fork();//At least one worker is required.
