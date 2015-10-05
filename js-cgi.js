@@ -363,8 +363,8 @@ function handleRequest(req, res) {
 						res: res
 					};
 					var c = vm.createContext(sandbox);
-            	
-					return vm.runInContext(source, c, {displayErrors: true});
+            		//return vm.runInContext(source, c, {displayErrors: true});
+					return vm.runInContext('(function() {try{'+source+'}catch(e){console.log(e);res.status(500).send(e.toString());}})();', c, {displayErrors: true});
 				}catch(err){
 					console.error(err, err.stack);
 					//res.writeHead(500);
