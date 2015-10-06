@@ -1,5 +1,17 @@
 /*******************************************
-* Darrel Kathan - 10/6/2015
+* js-cgi.js
+* Copyright (c) 2015, Darrel Kathan 
+* Licensed under the MIT license.
+*
+* A current version and some documentation is available at
+*    https://github.com/kathan/js-cgi
+*
+* @summary     Javascript CGI process manager
+* @description js-cgi is a javascript CGI process manager, similar to php-fpm, for executing node.js/io.js compatible scripts behind NGINX or Apache.
+* @file        js-cgi.js
+* @version     0.1.0
+* @author      Darrel Kathan
+* @license     MIT
 *******************************************/
 'use strict';
 
