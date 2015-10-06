@@ -1,4 +1,6 @@
-/*Darrel Kathan*/
+/*******************************************
+* Darrel Kathan - 10/6/2015
+*******************************************/
 'use strict';
 
 var cluster = require('cluster'),
@@ -29,6 +31,9 @@ console.log = function(){
 	}
 };
 
+/*******************************************
+* Funnel console.log input to log file.
+*******************************************/
 console.error = function(msg, stack){
 	var d = new Date(),
 		log_msg = d.toString()+' - ('+process.pid+'): '+msg;
@@ -39,6 +44,10 @@ console.error = function(msg, stack){
 	}
 };
 
+/*******************************************
+* Prepare web server to handle cookies and
+* format JSON.
+*******************************************/
 app.use(cookieParser());
 app.set('json spaces', 4);
 
@@ -58,7 +67,11 @@ if(fs.existsSync(path.join(__dirname, config_name))){
 	config.workers = (os.cpus().length/2)-1;//For some reason cpus.length is reports twice as many cores than actual.
 }
 
-/* Override the "require" function to watch if required files have change and expire them from cache when they do*/
+/*******************************************
+* Override the "require" function to watch
+* if required files have change and expire
+* them from cache when they do.
+*******************************************/
 var assert = require('assert').ok,
 	Module = require('module');
 if(typeof Module._watching !== 'object'){
@@ -93,7 +106,9 @@ Module.prototype.require = function(path) {
   return Module._load(path, this);
 };
 
-/* Start up the server node */
+/*******************************************
+* Start up the server node.
+*******************************************/
 if (cluster.isMaster) {
 	cluster.globals = {};
 	cluster.fork();//At least one worker is required.
@@ -136,7 +151,9 @@ if (cluster.isMaster) {
 		}
 	});
 
-    // Now run the handler function in the domain.
+    /*******************************************
+    * Now run the handler function in the domain.
+    *******************************************/
     d.run(function() {
 		console.log('Listening on '+config.port);
       
@@ -149,16 +166,86 @@ if (cluster.isMaster) {
 	});
 }
 
-function clearRequiredCache(name){
-	
-}
-
 function setRequiredCacheTimestamp(name){
 	if(require.cache[process.execPath][name]){
 		return require.cache[process.execPath][name];
 	}
 }
 
+/*******************************************
+* This is where all of the web requests are
+* handled.
+*******************************************/
+function handleRequest(req, res) {
+	var url_obj = url.parse(req.url, true),
+		file_path;
+	/*if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
+		//res.writeHead(401);
+		res.end(401);
+	}*/
+
+	if(req.headers.path_translated && url_obj.pathname){
+		file_path = req.headers.path_translated+url_obj.pathname;
+	}else{
+		file_path = url_obj.pathname;
+	}
+
+	//console.log('file_path:'+file_path);
+	function resolveModule(module) {
+		if (module.charAt(0) !== '.'){
+			//console.log('No need to resolve '+module);
+			return module;
+		}
+		//console.log('Resolved '+module+' to '+path.resolve(path.dirname(file_path), module));
+		return path.resolve(path.dirname(file_path), module);
+	}
+
+	//If the requested file exists...
+	fs.exists(file_path, function(exists){
+		if(exists){
+			fs.readFile(file_path, function (err, source) {
+				if(err){
+					//Error reading file
+					console.error(err, err.stack);
+					res.writeHead(500, err);
+					return res.send(err.toString());
+				}
+				try{
+					console.log('Request: '+file_path);
+					//console.log(require.cache);
+					var sandbox = {
+						//globals: globals,
+						console: console,
+						setImmediate: setImmediate,
+						require: function(name) {
+							var mod_path = resolveModule(name);
+							//watchRequired(mod_path);
+							return require(mod_path);
+						},
+						req: req,
+						res: res
+					};
+					var c = vm.createContext(sandbox);
+            		//return vm.runInContext(source, c, {displayErrors: true});
+					return vm.runInContext('(function() {try{'+source+'}catch(e){console.log(e);res.status(500).send(e.toString());}})();', c, {displayErrors: true});
+				}catch(err){
+					console.error(err, err.stack);
+					//res.writeHead(500);
+					return res.status(500).send(err.toString());
+				}
+			});
+		}else{
+			//File does not exist
+			//res.writeHead(404, 'File not found.');
+			return res.status(404).send('File not found.');
+		}
+	});
+}
+
+/*******************************************
+* The following handleRequest options were
+* less successful.
+*******************************************/
 function handleRequestScript(req, res) {
   var url_obj = url.parse(req.url, true);
   /*if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
@@ -311,70 +398,4 @@ function handleRequestRIC(req, res) {
       return res.send('File not found.');
     }
   });
-}
-
-function handleRequest(req, res) {
-	var url_obj = url.parse(req.url, true),
-		file_path;
-	/*if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
-		//res.writeHead(401);
-		res.end(401);
-	}*/
-
-	if(req.headers.path_translated && url_obj.pathname){
-		file_path = req.headers.path_translated+url_obj.pathname;
-	}else{
-		file_path = url_obj.pathname;
-	}
-
-	//console.log('file_path:'+file_path);
-	function resolveModule(module) {
-		if (module.charAt(0) !== '.'){
-			//console.log('No need to resolve '+module);
-			return module;
-		}
-		//console.log('Resolved '+module+' to '+path.resolve(path.dirname(file_path), module));
-		return path.resolve(path.dirname(file_path), module);
-	}
-
-	//If the requested file exists...
-	fs.exists(file_path, function(exists){
-		if(exists){
-			fs.readFile(file_path, function (err, source) {
-				if(err){
-					//Error reading file
-					console.error(err, err.stack);
-					res.writeHead(500, err);
-					return res.send(err.toString());
-				}
-				try{
-					console.log('Request: '+file_path);
-					//console.log(require.cache);
-					var sandbox = {
-						//globals: globals,
-						console: console,
-						setImmediate: setImmediate,
-						require: function(name) {
-							var mod_path = resolveModule(name);
-							//watchRequired(mod_path);
-							return require(mod_path);
-						},
-						req: req,
-						res: res
-					};
-					var c = vm.createContext(sandbox);
-            		//return vm.runInContext(source, c, {displayErrors: true});
-					return vm.runInContext('(function() {try{'+source+'}catch(e){console.log(e);res.status(500).send(e.toString());}})();', c, {displayErrors: true});
-				}catch(err){
-					console.error(err, err.stack);
-					//res.writeHead(500);
-					return res.status(500).send(err.toString());
-				}
-			});
-		}else{
-			//File does not exist
-			//res.writeHead(404, 'File not found.');
-			return res.status(404).send('File not found.');
-		}
-	});
 }
