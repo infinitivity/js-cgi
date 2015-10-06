@@ -19,7 +19,10 @@ var cluster = require('cluster'),
 		console.error('Error:'+err);
 	};
 
-/* Override console.log to write messages to log file. */
+/*******************************************
+* Funnel console.log and console.error 
+* input to log file.
+*******************************************/
 console.log = function(){
 	var d = new Date(),
 		log_msg = d.toString()+' - ('+process.pid+'): ',
@@ -31,9 +34,7 @@ console.log = function(){
 	}
 };
 
-/*******************************************
-* Funnel console.log input to log file.
-*******************************************/
+
 console.error = function(msg, stack){
 	var d = new Date(),
 		log_msg = d.toString()+' - ('+process.pid+'): '+msg;
