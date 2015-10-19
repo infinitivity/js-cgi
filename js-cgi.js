@@ -17,7 +17,8 @@
 
 var cluster = require('cluster'),
 	url = require('url'),
-	fs = require('fs'),
+	//fs = require('fs'),
+	fs = require('graceful-fs'),
 	vm = require('vm'),
 	os = require('os'),
 	util = require('util'),
@@ -26,10 +27,7 @@ var cluster = require('cluster'),
 	cookieParser = require('cookie-parser'),
 	app = express(),
 	config_name = 'js-cgi.config',
-	config = {},
-	error = function(err) {
-		console.error('Error:'+err);
-	};
+	config = {};
 
 /*******************************************
 * Funnel console.log and console.error 
@@ -47,13 +45,13 @@ console.log = function(){
 };
 
 
-console.error = function(msg, stack){
+console.error = function(err){
 	var d = new Date(),
-		log_msg = d.toString()+' - ('+process.pid+'): '+msg;
-	util.error(log_msg, stack);
+		log_msg = d.toString()+' - ('+process.pid+'): '+err.toString();
+	util.error(log_msg, err.stack);
 	if(config.output_log){
-		fs.appendFile(config.output_log, log_msg+'\n', function(){});
-		fs.appendFile(config.output_log, stack+'\n', function(){return;});
+		fs.appendFile(config.output_log, log_msg+'\n', function(){return;});
+		fs.appendFile(config.output_log, err.stack+'\n', function(){return;});
 	}
 };
 
@@ -95,7 +93,7 @@ function watchRequired(fn){
 		console = console;*/
 	//console.log(fn);
 	if(Module._watching && !Module._watching.hasOwnProperty(fn)){
-		if(fs.existsSync(fn)){
+		if(fs.existsSync(fn) && !Module._watching.hasOwnProperty(fn)){
 			console.log('Watching '+fn);
 			Module._watching[fn] = fs.watch(fn, function(event,f){
 			//Module._watching[fn] = fs.watchFile(fn, function(curr, prev){
@@ -103,8 +101,8 @@ function watchRequired(fn){
 				
 				if(Module._cache.hasOwnProperty(fn)){
 					console.log('Expiring '+fn);
-					return delete Module._cache[fn];
 					//fs.unwatch(fn, function(){return;});
+					return delete Module._cache[fn];
 				}
 				return;
 			});
@@ -127,12 +125,13 @@ if (cluster.isMaster) {
 	cluster.fork();//At least one worker is required.
 	
 	for(var w = 2; w <= config.workers;w++){
-		cluster.fork().on('error', error);
+		cluster.fork().on('error', console.error);
 	}
 
 	cluster.on('disconnect', function(worker) {
-		console.error('disconnect!');
-		cluster.fork().on('error', error);
+		var e = new Error('disconnect!');
+		//console.error(e);
+		cluster.fork().on('error', console.error);
 	});
 } else {
 	// the worker
@@ -141,11 +140,12 @@ if (cluster.isMaster) {
 		d = domain.create();
 
 	d.on('error', function(er) {
-		console.error('error', er.stack);
+		console.error(er);
 		try {
 			// make sure we close down if it times out
 			var killtimer = setTimeout(function() {
-				console.error('Killing process. Timeout expired ('+config.timeout+' ms)');
+				var err = new Error('Killing process. Timeout expired ('+config.timeout+' ms)')
+				console.error(err);
 				return process.exit(1);
 			}, config.timeout);
 			// But don't keep the process open just for that!
@@ -160,7 +160,7 @@ if (cluster.isMaster) {
 			cluster.worker.disconnect();
 		} catch (er2) {
 			// oh well, not much we can do at this point.
-			console.error(er2.stack);
+			console.error(er2);
 		}
 	});
 
@@ -219,7 +219,7 @@ function handleRequest(req, res) {
 			fs.readFile(file_path, function (err, source) {
 				if(err){
 					//Error reading file
-					console.error(err, err.stack);
+					console.error(err);
 					res.writeHead(500, err);
 					return res.send(err.toString());
 				}
@@ -236,13 +236,15 @@ function handleRequest(req, res) {
 							return require(mod_path);
 						},
 						req: req,
-						res: res
+						res: res,
+						process: process
 					};
 					var c = vm.createContext(sandbox);
             		//return vm.runInContext(source, c, {displayErrors: true});
-					return vm.runInContext('(function() {try{'+source+'}catch(e){console.log(e);res.status(500).send(e.toString());}})();', c, {displayErrors: true});
+					return vm.runInContext('(function(){try{'+source+'}catch(e){console.error(e);res.status(500).send({err: e.toString(), stack: e.stack});}})();', c, {displayErrors: true});
+					//return vm.runInContext('function runInContext() {try{'+source+'}catch(e){console.error(e);res.status(500).send({err: e.toString(), stack: e.stack});}} runInContext();', c, {displayErrors: true});
 				}catch(err){
-					console.error(err, err.stack);
+					console.error(err);
 					//res.writeHead(500);
 					return res.status(500).send(err.toString());
 				}
@@ -304,7 +306,7 @@ function handleRequestScript(req, res) {
 	      	
 	      }catch(err){
 	      	res.writeHead(500);
-	      	console.error(err.stack)
+	      	console.error(err)
 	      	res.end(err+' in '+file_path);
 	      }
 	    });
@@ -376,14 +378,14 @@ function handleRequestRIC(req, res) {
       fs.readFile(file_path, function (err, source) {
         if(err){
           //Error reading file
-          console.error(err, err.stack);
+          console.error(err);
           res.writeHead(500, err);
           return res.send(err.toString());
         }
         try{
           //console.log('filename:'+file_path);
 
-          //var script = vm.createScript('try{\n'+source+'\n}catch(err){console.error(err, err.stack);res.writeHead(500);res.end(err.toString());}');
+          //var script = vm.createScript('try{\n'+source+'\n}catch(err){console.error(err);res.writeHead(500);res.end(err.toString());}');
           var script = vm.createScript(source);
           //console.log('pre execute:'+g);
           var sandbox = {
@@ -400,7 +402,7 @@ function handleRequestRIC(req, res) {
           return script.runInNewContext(sandbox);
 
         }catch(err){
-          console.error(err, err.stack);
+          console.error(err);
           res.writeHead(500);
           return res.send(err.toString());
         }
