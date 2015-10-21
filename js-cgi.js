@@ -76,6 +76,7 @@ if(fs.existsSync(path.join(__dirname, config_name))){
 	//config.workers = 2;
 	config.timeout = 30000;
 	config.workers = (os.cpus().length/2)-1;//For some reason cpus.length is reports twice as many cores than actual.
+	config.watch_required = false;
 }
 
 /*******************************************
@@ -113,7 +114,9 @@ function watchRequired(fn){
 Module.prototype.require = function(path) {
   assert(path, 'missing path');
   assert((typeof path === 'string'), 'path must be a string');
-  watchRequired(Module._resolveFilename(path, this));
+  if(config.watch_required){
+	  watchRequired(Module._resolveFilename(path, this));
+  }
   return Module._load(path, this);
 };
 
