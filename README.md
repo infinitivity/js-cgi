@@ -16,7 +16,8 @@ Example:
 module.exports = {
    port:3000,
    localhostOnly:true,
-   workers:2
+   workers:2,
+   watch_required:false,
 };
 
 ```
@@ -24,6 +25,7 @@ module.exports = {
 * port - Indicates which TCP port to listen on. default=3000
 * localhostOnly - Prevents non-local agents from invoking scripts. default=true
 * workers - Number of worker processes. default=2
+* watch_required - Setting to 'true' watches files in packages that have been required and will expire them from the require cache if they change. WARNING: This is experimental and can cause "EMFILE" errors. default=false
 
 ####Usage:
 Add a directive to your `nginx.conf` file. I use an "njs" extension on the server javascript files instead of a "js" extension so NGINX won't confuse them with browser javascript files.
