@@ -62,22 +62,21 @@ console.error = function(err){
 app.use(cookieParser());
 app.set('json spaces', 4);
 
-config.output_log = path.dirname(process.argv[1])+'/js-cgi.log';
 //console.log(config.output_log);
 if(fs.existsSync(path.join(__dirname, config_name))){
 	//Load the congfig file
 	console.log('Loading '+config_name+'...');
 	config = require('./'+config_name);
-}else{
-	//Use the default congfig
-	console.log('Loading default config...');
-	config.port = 3000;
-	config.localhostOnly = true;
-	//config.workers = 2;
-	config.timeout = 30000;
-	config.workers = (os.cpus().length/2)-1;//For some reason cpus.length is reports twice as many cores than actual.
-	config.watch_required = false;
 }
+
+//Set default config items
+!config.output_log ? config.output_log = path.dirname(process.argv[1])+'/js-cgi.log' : '';
+!config.port ? config.port = 3000 : '';
+!config.localhostOnly ? config.localhostOnly = true : '';
+!config.timeout ? config.timeout = 30000 : '';
+!config.workers ? config.workers = (os.cpus().length/2)-1 : '';//For some reason cpus.length is reports twice as many cores than actual.
+!config.watch_required ? config.watch_required = false : '';
+
 
 /*******************************************
 * Override the "require" function to watch
