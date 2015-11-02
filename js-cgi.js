@@ -33,7 +33,20 @@ var cluster = require('cluster'),
 * Funnel console.log and console.error 
 * input to log file.
 *******************************************/
+var console_log = console.log,
+	console_error = console.error;
+
 console.log = function(){
+	var d = new Date(),
+		log_msg = d.toString()+' - ('+process.pid+'): ';
+    if(config.output_log){
+		fs.appendFile(config.output_log, log_msg + util.format.apply(this, arguments) + '\n', function(){return;});
+	}
+
+    return console_log.apply(this, arguments);
+};
+
+/*console.log = function(){
 	var d = new Date(),
 		log_msg = d.toString()+' - ('+process.pid+'): ',
 		stack = new Error().stack;
@@ -42,17 +55,18 @@ console.log = function(){
 	if(config.output_log){
 		fs.appendFile(config.output_log, log_msg + util.format.apply(this, arguments) + '\n', function(){return;});
 	}
-};
-
+};*/
 
 console.error = function(err){
 	var d = new Date(),
-		log_msg = d.toString()+' - ('+process.pid+'): '+err.toString();
-	util.error(log_msg, err.stack);
+		log_msg = d.toString()+' - ('+process.pid+'): ',
+		stack = new Error().stack;
+		
 	if(config.output_log){
 		fs.appendFile(config.output_log, log_msg+'\n', function(){return;});
 		fs.appendFile(config.output_log, err.stack+'\n', function(){return;});
 	}
+	return console_log.apply(this, arguments);
 };
 
 /*******************************************
@@ -192,6 +206,7 @@ function setRequiredCacheTimestamp(name){
 * handled.
 *******************************************/
 function handleRequest(req, res) {
+	
 	var url_obj = url.parse(req.url, true),
 		file_path;
 	/*if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
@@ -204,7 +219,7 @@ function handleRequest(req, res) {
 	}else{
 		file_path = url_obj.pathname;
 	}
-
+	console.log('Request: '+file_path);
 	//console.log('file_path:'+file_path);
 	function resolveModule(module) {
 		if (module.charAt(0) !== '.'){
@@ -226,7 +241,7 @@ function handleRequest(req, res) {
 					return res.send(err.toString());
 				}
 				try{
-					console.log('Request: '+file_path);
+					
 					//console.log(require.cache);
 					var sandbox = {
 						//globals: globals,
@@ -243,7 +258,7 @@ function handleRequest(req, res) {
 					};
 					var c = vm.createContext(sandbox);
             		//return vm.runInContext(source, c, {displayErrors: true});
-					return vm.runInContext('(function(){try{'+source+'}catch(e){console.error(e);res.status(500).send({err: e.toString(), stack: e.stack});}})();', c, {displayErrors: true});
+					return vm.runInContext('(function(){try{'+source+'}catch(e){console.error(e);return res.status(500).send({err: e.toString(), stack: e.stack});}})();', c, {displayErrors: true});
 					//return vm.runInContext('function runInContext() {try{'+source+'}catch(e){console.error(e);res.status(500).send({err: e.toString(), stack: e.stack});}} runInContext();', c, {displayErrors: true});
 				}catch(err){
 					console.error(err);
@@ -257,162 +272,4 @@ function handleRequest(req, res) {
 			return res.status(404).send('File not found.');
 		}
 	});
-}
-
-/*******************************************
-* The following handleRequest options were
-* less successful.
-*******************************************/
-function handleRequestScript(req, res) {
-  var url_obj = url.parse(req.url, true);
-  /*if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
-    //res.writeHead(401);
-    res.end(401);
-  }*/
-
-  var file_path;
-  if(req.headers.path_translated && url_obj.pathname){
-    file_path = req.headers.path_translated+url_obj.pathname;
-  }else{
-    file_path = url_obj.pathname;
-  }
-  
-  function resolveModule(module) {
-    if (module.charAt(0) !== '.'){
-      //console.log('No need to resolve '+module);
-      return module;
-    }
-    //console.log('Resolved '+module+' to '+path.resolve(path.dirname(file_path), module));
-    return path.resolve(path.dirname(file_path), module);
-  }
-  
-  function myRequire(name) {
-    return require(resolveModule(name));
-  }
-  
-  //If the requested file exists...
-  fs.exists(file_path, function(exists){
-    if(exists){
-    	fs.readFile(file_path, function(err, content){
-	      try{
-	      	var path_dir = file_path.split("/");
-	      	path_dir.pop();
-	      	path_dir = path_dir.join('/');
-	      	//console.log(path_dir);
-	      	process.chdir(path_dir);
-	      	//console.log(process.cwd());
-	      	var script = Function('req', 'res', 'globals', 'require', content);
-	      	//console.log(script.toString());
-	      	console.log(file_path);
-	      	script(req, res, cluster.globals, myRequire);
-	      	
-	      }catch(err){
-	      	res.writeHead(500);
-	      	console.error(err)
-	      	res.end(err+' in '+file_path);
-	      }
-	    });
-    }else{
-      //File does not exist
-      res.writeHead(404, 'File not found.');
-      res.end('File '+file_path+' not found.');
-    }
-  });
-}
-
-function handleRequestRequire(req, res) {
-  var url_obj = url.parse(req.url, true);
-  /*if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
-    //res.writeHead(401);
-    res.end(401);
-  }*/
-
-  var file_path;
-  if(req.headers.path_translated && url_obj.pathname){
-    file_path = req.headers.path_translated+url_obj.pathname;
-  }else{
-    file_path = url_obj.pathname;
-  }
-  
-  //If the requested file exists...
-  fs.exists(file_path, function(exists){
-    if(exists){
-      var script = require(file_path);
-      if(typeof script === 'function'){
-      	script(req, res, cluster.globals);
-      }else{
-      	res.writeHead(500);
-      	return res.send('Script is not configured correctly.');
-      }
-    }else{
-      //File does not exist
-      res.writeHead(404, 'File not found.');
-      return res.send('File '+file_path+' not found.');
-    }
-  });
-}
-
-function handleRequestRIC(req, res) {
-  var url_obj = url.parse(req.url, true);
-  /*if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
-    //res.writeHead(401);
-    res.end(401);
-  }*/
-
-  var file_path;
-  if(req.headers.path_translated && url_obj.pathname){
-    file_path = req.headers.path_translated+url_obj.pathname;
-  }else{
-    file_path = url_obj.pathname;
-  }
-  //console.log('file_path:'+file_path);
-  function resolveModule(module) {
-    if (module.charAt(0) !== '.'){
-      //console.log('No need to resolve '+module);
-      return module;
-    }
-    //console.log('Resolved '+module+' to '+path.resolve(path.dirname(file_path), module));
-    return path.resolve(path.dirname(file_path), module);
-  }
-  //If the requested file exists...
-  fs.exists(file_path, function(exists){
-    if(exists){
-      fs.readFile(file_path, function (err, source) {
-        if(err){
-          //Error reading file
-          console.error(err);
-          res.writeHead(500, err);
-          return res.send(err.toString());
-        }
-        try{
-          //console.log('filename:'+file_path);
-
-          //var script = vm.createScript('try{\n'+source+'\n}catch(err){console.error(err);res.writeHead(500);res.end(err.toString());}');
-          var script = vm.createScript(source);
-          //console.log('pre execute:'+g);
-          var sandbox = {
-                  //globals: globals,
-                  console: console,
-                  require: function(name) {
-                           return require(resolveModule(name));
-                       },
-                req: req,
-                res: res,
-                displayErrors: true
-            };
-
-          return script.runInNewContext(sandbox);
-
-        }catch(err){
-          console.error(err);
-          res.writeHead(500);
-          return res.send(err.toString());
-        }
-      });
-    }else{
-      //File does not exist
-      res.writeHead(404, 'File not found.');
-      return res.send('File not found.');
-    }
-  });
 }
