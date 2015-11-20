@@ -24,10 +24,14 @@ var cluster = require('cluster'),
 	util = require('util'),
 	path = require('path'),
 	express = require('express'),
+	bodyParser = require('body-parser'),
 	cookieParser = require('cookie-parser'),
 	app = express(),
 	config_name = 'js-cgi.config',
 	config = {};
+
+app.use(bodyParser.json()); // for parsing application/json
+app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
 
 /*******************************************
 * Funnel console.log and console.error 
@@ -66,7 +70,7 @@ console.error = function(err){
 		fs.appendFile(config.output_log, log_msg+'\n', function(){return;});
 		fs.appendFile(config.output_log, err.stack+'\n', function(){return;});
 	}
-	return console_log.apply(this, arguments);
+	return console_error.apply(this, arguments);
 };
 
 /*******************************************
@@ -139,7 +143,7 @@ Module.prototype.require = function(path) {
 if (cluster.isMaster) {
 	cluster.globals = {};
 	cluster.fork();//At least one worker is required.
-	
+	console.log(process.versions);
 	for(var w = 2; w <= config.workers;w++){
 		cluster.fork().on('error', console.error);
 	}
@@ -247,6 +251,8 @@ function handleRequest(req, res) {
 						//globals: globals,
 						console: console,
 						setImmediate: setImmediate,
+						setInterval: setInterval,
+						JSON: JSON,
 						require: function(name) {
 							var mod_path = resolveModule(name);
 							//watchRequired(mod_path);
