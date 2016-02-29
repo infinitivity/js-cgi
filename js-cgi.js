@@ -7,18 +7,19 @@
 *    https://github.com/kathan/js-cgi
 *
 * @summary     Javascript CGI process manager
-* @description js-cgi is a javascript CGI process manager, similar to php-fpm, for executing node.js/io.js compatible scripts behind NGINX or Apache.
+* @description js-cgi is a javascript CGI process manager, similar to php-fpm, for executing node.js compatible scripts behind NGINX or Apache.
 * @file        js-cgi.js
-* @version     0.1.0
+* @version     0.2.0
 * @author      Darrel Kathan
 * @license     MIT
+* 2/16/16 - Added cluster node cache
 *******************************************/
 'use strict';
 
 var cluster = require('cluster'),
+  
 	url = require('url'),
-	//fs = require('fs'),
-	fs = require('graceful-fs'),
+	fs = require('fs'),
 	vm = require('vm'),
 	os = require('os'),
 	util = require('util'),
@@ -29,7 +30,7 @@ var cluster = require('cluster'),
 	app = express(),
 	config_name = 'js-cgi.config',
 	config = {};
-
+global.cache = require('cluster-node-cache')(cluster);
 app.use(bodyParser.json()); // for parsing application/json
 app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
 
@@ -50,25 +51,13 @@ console.log = function(){
     return console_log.apply(this, arguments);
 };
 
-/*console.log = function(){
-	var d = new Date(),
-		log_msg = d.toString()+' - ('+process.pid+'): ',
-		stack = new Error().stack;
-		
-	this._stdout.write(log_msg + util.format.apply(this, arguments) + stack + '\n');
-	if(config.output_log){
-		fs.appendFile(config.output_log, log_msg + util.format.apply(this, arguments) + '\n', function(){return;});
-	}
-};*/
-
 console.error = function(err){
 	var d = new Date(),
-		log_msg = d.toString()+' - ('+process.pid+'): ',
-		stack = new Error().stack;
+		log_msg = d.toString()+' - ('+process.pid+'): ';
 		
 	if(config.output_log){
-		fs.appendFile(config.output_log, log_msg+'\n', function(){return;});
-		fs.appendFile(config.output_log, err.stack+'\n', function(){return;});
+		fs.appendFile(config.output_log, log_msg+util.format.apply(this, arguments) +'\n', function(){return;});
+		fs.appendFile(config.output_log, err.stack+util.format.apply(this, arguments) +'\n', function(){return;});
 	}
 	return console_error.apply(this, arguments);
 };
@@ -142,16 +131,18 @@ Module.prototype.require = function(path) {
 *******************************************/
 if (cluster.isMaster) {
 	cluster.globals = {};
-	cluster.fork();//At least one worker is required.
+	cluster.fork().on('error', console.error);//At least one worker is required.
 	console.log(process.versions);
 	for(var w = 2; w <= config.workers;w++){
 		cluster.fork().on('error', console.error);
 	}
 
 	cluster.on('disconnect', function(worker) {
-		var e = new Error('disconnect!');
-		//console.error(e);
 		cluster.fork().on('error', console.error);
+	});
+	
+	cluster.on('listening', function(worker, address){
+	  console.log("A worker is now connected to " + address.address + ":" + address.port);
 	});
 } else {
 	// the worker
@@ -164,7 +155,7 @@ if (cluster.isMaster) {
 		try {
 			// make sure we close down if it times out
 			var killtimer = setTimeout(function() {
-				var err = new Error('Killing process. Timeout expired ('+config.timeout+' ms)')
+				var err = new Error('Killing process. Timeout expired ('+config.timeout+' ms)');
 				console.error(err);
 				return process.exit(1);
 			}, config.timeout);
@@ -187,7 +178,7 @@ if (cluster.isMaster) {
     /*******************************************
     * Now run the handler function in the domain.
     *******************************************/
-    d.run(function() {
+  d.run(function() {
 		console.log('Listening on '+config.port);
       
 		server = app.listen(config.port);
@@ -197,12 +188,6 @@ if (cluster.isMaster) {
 			return handleRequest(req, res);
 		});
 	});
-}
-
-function setRequiredCacheTimestamp(name){
-	if(require.cache[process.execPath][name]){
-		return require.cache[process.execPath][name];
-	}
 }
 
 /*******************************************
@@ -241,14 +226,14 @@ function handleRequest(req, res) {
 				if(err){
 					//Error reading file
 					console.error(err);
-					res.writeHead(500, err);
-					return res.send(err.toString());
+					//res.writeHead(500, err);
+					return res.status(500).send(err.toString());
 				}
 				try{
 					
 					//console.log(require.cache);
 					var sandbox = {
-						//globals: globals,
+						cache: cache,
 						console: console,
 						setImmediate: setImmediate,
 						setInterval: setInterval,
@@ -260,12 +245,13 @@ function handleRequest(req, res) {
 						},
 						req: req,
 						res: res,
-						process: process
+						process: process,
+						__dirname: path.dirname(file_path)
 					};
 					var c = vm.createContext(sandbox);
             		//return vm.runInContext(source, c, {displayErrors: true});
-					return vm.runInContext('(function(){try{'+source+'}catch(e){console.error(e);return res.status(500).send({err: e.toString(), stack: e.stack});}})();', c, {displayErrors: true});
-					//return vm.runInContext('function runInContext() {try{'+source+'}catch(e){console.error(e);res.status(500).send({err: e.toString(), stack: e.stack});}} runInContext();', c, {displayErrors: true});
+					//return vm.runInContext('(function(){try{'+source+'}catch(e){console.error(e);return res.status(500).send({error: e.toString(), stack: e.stack});}})();', c, {displayErrors: true, timeout:config.timeout, filename:file_path});
+					return vm.runInContext('function runInContext() {try{'+source+'}catch(e){console.error(e);res.status(500).send({error: e.toString(), stack: e.stack});}} runInContext();', c, file_path);
 				}catch(err){
 					console.error(err);
 					//res.writeHead(500);
