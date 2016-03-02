@@ -56,8 +56,8 @@ console.error = function(err){
 		log_msg = d.toString()+' - ('+process.pid+'): ';
 		
 	if(config.output_log){
-		fs.appendFile(config.output_log, log_msg+util.format.apply(this, arguments) +'\n', function(){return;});
-		fs.appendFile(config.output_log, err.stack+util.format.apply(this, arguments) +'\n', function(){return;});
+		fs.appendFile(config.error_log, log_msg+util.format.apply(this, arguments) +'\n', function(){return;});
+		fs.appendFile(config.error_log, err.stack+util.format.apply(this, arguments) +'\n', function(){return;});
 	}
 	return console_error.apply(this, arguments);
 };
@@ -67,7 +67,7 @@ console.error = function(err){
 * format JSON.
 *******************************************/
 app.use(cookieParser());
-app.set('json spaces', 4);
+app.set('json spaces', 2);
 
 //console.log(config.output_log);
 if(fs.existsSync(path.join(__dirname, config_name))){
@@ -78,6 +78,7 @@ if(fs.existsSync(path.join(__dirname, config_name))){
 
 //Set default config items
 !config.output_log ? config.output_log = path.dirname(process.argv[1])+'/js-cgi.log' : '';
+!config.error_log ? config.error_log = path.dirname(process.argv[1])+'/err.log' : '';
 !config.port ? config.port = 3000 : '';
 !config.localhostOnly ? config.localhostOnly = true : '';
 !config.timeout ? config.timeout = 30000 : '';
@@ -159,6 +160,7 @@ if (cluster.isMaster) {
 				console.error(err);
 				return process.exit(1);
 			}, config.timeout);
+			
 			// But don't keep the process open just for that!
 			killtimer.unref();
 
@@ -226,7 +228,6 @@ function handleRequest(req, res) {
 				if(err){
 					//Error reading file
 					console.error(err);
-					//res.writeHead(500, err);
 					return res.status(500).send(err.toString());
 				}
 				try{
@@ -254,13 +255,11 @@ function handleRequest(req, res) {
 					return vm.runInContext('function runInContext() {try{'+source+'}catch(e){console.error(e);res.status(500).send({error: e.toString(), stack: e.stack});}} runInContext();', c, file_path);
 				}catch(err){
 					console.error(err);
-					//res.writeHead(500);
 					return res.status(500).send(err.toString());
 				}
 			});
 		}else{
 			//File does not exist
-			//res.writeHead(404, 'File not found.');
 			return res.status(404).send('File not found.');
 		}
 	});
