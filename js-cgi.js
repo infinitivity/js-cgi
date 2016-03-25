@@ -17,7 +17,7 @@
 'use strict';
 
 var cluster = require('cluster'),
-  
+  _ = require('lodash'),
 	url = require('url'),
 	fs = require('fs'),
 	vm = require('vm'),
@@ -200,7 +200,23 @@ function handleRequest(req, res) {
 	
 	var url_obj = url.parse(req.url, true),
 		file_path;
-	if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
+	
+	/*var cache = [],
+    j = JSON.stringify(req, function(key, value) {
+      
+      if (typeof value === 'object' && value !== null) {
+        var idx = _.findIndex(cache, value);
+        if (idx > -1) {return '[Circular '+idx+']';}
+        cache.push(value);
+      }
+    return value;
+  });
+  
+  res.send(j);*/
+  console.log('req.connection.remoteAddress:', '"'+req.connection.remoteAddress+'"')
+	if(config.localhostOnly &&
+	   (req.connection.remoteFamily === 'IPv4' && !_.endsWith(req.connection.remoteAddress, '127.0.0.1')) ||
+	   (req.connection.remoteFamily === 'IPv6' && !_.endsWith(req.connection.remoteAddress, '::1'))){
 		//res.writeHead(401);
 		return res.status(401).end();
 	}
@@ -210,7 +226,7 @@ function handleRequest(req, res) {
 	}else{
 		file_path = url_obj.pathname;
 	}
-	console.log('Request: '+file_path);
+	console.log(req.method+': '+file_path);
 	//console.log('file_path:'+file_path);
 	function resolveModule(module) {
 		if (module.charAt(0) !== '.'){
