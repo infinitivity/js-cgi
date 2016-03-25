@@ -200,10 +200,10 @@ function handleRequest(req, res) {
 	
 	var url_obj = url.parse(req.url, true),
 		file_path;
-	/*if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
+	if(config.localhostOnly && req.connection.remoteAddress !== '127.0.0.1'){
 		//res.writeHead(401);
-		res.end(401);
-	}*/
+		return res.status(401).end();
+	}
 
 	if(req.headers.path_translated && url_obj.pathname){
 		file_path = req.headers.path_translated+url_obj.pathname;
