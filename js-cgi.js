@@ -213,12 +213,14 @@ function handleRequest(req, res) {
   });
   
   res.send(j);*/
-  console.log('req.connection.remoteAddress:', '"'+req.connection.remoteAddress+'"')
-	if(config.localhostOnly &&
-	   (req.connection.remoteFamily === 'IPv4' && !_.endsWith(req.connection.remoteAddress, '127.0.0.1')) ||
-	   (req.connection.remoteFamily === 'IPv6' && !_.endsWith(req.connection.remoteAddress, '::1'))){
-		//res.writeHead(401);
-		return res.status(401).end();
+  //console.log('req.connection.remoteFamily:', '"'+req.connection.remoteFamily+'"');
+  //console.log('req.connection.remoteAddress:', '"'+req.connection.remoteAddress+'"');
+	if(config.localhostOnly){
+	  if((req.connection.remoteFamily === 'IPv4' && req.connection.remoteAddress !== '127.0.0.1') ||
+	     (req.connection.remoteFamily === 'IPv6' && (!_.endsWith(req.connection.remoteAddress, '::1') && !_.endsWith(req.connection.remoteAddress, ':127.0.0.1')))){
+		    //res.writeHead(401);
+		   return res.status(401).end();
+		}
 	}
 
 	if(req.headers.path_translated && url_obj.pathname){
@@ -250,7 +252,6 @@ function handleRequest(req, res) {
 					
 					//console.log(require.cache);
 					var sandbox = {
-						cache: cache,
 						console: console,
 						setImmediate: setImmediate,
 						setInterval: setInterval,
