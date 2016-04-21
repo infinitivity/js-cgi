@@ -1,5 +1,6 @@
 module.exports = {
    port:3000,
    localhostOnly:true,
-   workers:2
+   workers:2,
+   watch_required:false,
 };

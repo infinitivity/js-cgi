@@ -255,6 +255,7 @@ function handleRequest(req, res) {
 						console: console,
 						setImmediate: setImmediate,
 						setInterval: setInterval,
+						Buffer: Buffer,
 						JSON: JSON,
 						require: function(name) {
 							var mod_path = resolveModule(name);
