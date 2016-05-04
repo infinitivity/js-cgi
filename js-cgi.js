@@ -82,7 +82,7 @@ if(fs.existsSync(path.join(__dirname, config_name))){
 !config.port ? config.port = 3000 : '';
 !config.localhostOnly ? config.localhostOnly = true : '';
 !config.timeout ? config.timeout = 30000 : '';
-!config.workers ? config.workers = (os.cpus().length/2)-1 : '';//For some reason cpus.length is reports twice as many cores than actual.
+!config.workers ? config.workers = (os.cpus().length)-1 : '';//Subtract one for the master
 !config.watch_required ? config.watch_required = false : '';
 
 
