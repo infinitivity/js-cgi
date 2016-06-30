@@ -27,6 +27,7 @@ var cluster = require('cluster'),
 	express = require('express'),
 	bodyParser = require('body-parser'),
 	cookieParser = require('cookie-parser'),
+	multer = require('multer'),
 	app = express(),
 	config_name = 'js-cgi.config',
 	config = {};
@@ -103,7 +104,7 @@ function watchRequired(fn){
 	if(Module._watching && !Module._watching.hasOwnProperty(fn)){
 		if(fs.existsSync(fn) && !Module._watching.hasOwnProperty(fn)){
 			console.log('Watching '+fn);
-			Module._watching[fn] = fs.watch(fn, function(event,f){
+			Module._watching[fn] = fs.watch(fn, (event,f) => {
 			//Module._watching[fn] = fs.watchFile(fn, function(curr, prev){
 				console.log(fn, event);
 				
@@ -138,11 +139,11 @@ if (cluster.isMaster) {
 		cluster.fork().on('error', console.error);
 	}
 
-	cluster.on('disconnect', function(worker) {
+	cluster.on('disconnect', (worker) => {
 		cluster.fork().on('error', console.error);
 	});
 	
-	cluster.on('listening', function(worker, address){
+	cluster.on('listening', (worker, address) => {
 	  console.log("A worker is now connected to " + address.address + ":" + address.port);
 	});
 } else {
@@ -151,11 +152,11 @@ if (cluster.isMaster) {
 		server,
 		d = domain.create();
 
-	d.on('error', function(er) {
+	d.on('error', (er) => {
 		console.error(er);
 		try {
 			// make sure we close down if it times out
-			var killtimer = setTimeout(function() {
+			var killtimer = setTimeout(() => {
 				var err = new Error('Killing process. Timeout expired ('+config.timeout+' ms)');
 				console.error(err);
 				return process.exit(1);
@@ -180,12 +181,12 @@ if (cluster.isMaster) {
     /*******************************************
     * Now run the handler function in the domain.
     *******************************************/
-  d.run(function() {
+  d.run(() => {
 		console.log('Listening on '+config.port);
       
 		server = app.listen(config.port);
 
-		app.all('*', function(req, res){
+		app.all('*', (req, res) => {
 			//console.log('req');
 			return handleRequest(req, res);
 		});
@@ -240,13 +241,13 @@ function handleRequest(req, res) {
 	}
 
 	//If the requested file exists...
-	fs.exists(file_path, function(exists){
+	fs.exists(file_path, (exists) => {
 		if(exists){
-			fs.readFile(file_path, function (err, source) {
+			fs.readFile(file_path, (err, source) => {
 				if(err){
 					//Error reading file
 					console.error(err);
-					return res.status(500).send(err.toString());
+					return res.status(500).send({error: err.toString(), stack: err.stack});
 				}
 				try{
 					
@@ -268,12 +269,12 @@ function handleRequest(req, res) {
 						__dirname: path.dirname(file_path)
 					};
 					var c = vm.createContext(sandbox);
-            		//return vm.runInContext(source, c, {displayErrors: true});
+          //return vm.runInContext(source, c, {displayErrors: true});
 					//return vm.runInContext('(function(){try{'+source+'}catch(e){console.error(e);return res.status(500).send({error: e.toString(), stack: e.stack});}})();', c, {displayErrors: true, timeout:config.timeout, filename:file_path});
 					return vm.runInContext('function runInContext() {try{'+source+'}catch(e){console.error(e);res.status(500).send({error: e.toString(), stack: e.stack});}} runInContext();', c, file_path);
 				}catch(err){
 					console.error(err);
-					return res.status(500).send(err.toString());
+					return res.status(500).send({error: err.toString(), stack: err.stack});
 				}
 			});
 		}else{
