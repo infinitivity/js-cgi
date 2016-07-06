@@ -18,21 +18,22 @@
 'use strict';
 
 var cluster = require('cluster'),
-  _ = require('lodash'),
-	url = require('url'),
-	fs = require('fs'),
-	vm = require('vm'),
-	os = require('os'),
-	util = require('util'),
-	path = require('path'),
-	express = require('express'),
-	bodyParser = require('body-parser'),
-	cookieParser = require('cookie-parser'),
-	multer = require('multer'),
-	app = express(),
-	config_name = 'js-cgi.config',
-	config = {};
+    _ = require('lodash'),
+	  url = require('url'),
+	  fs = require('fs'),
+	  vm = require('vm'),
+	  os = require('os'),
+	  util = require('util'),
+	  path = require('path'),
+	  express = require('express'),
+	  bodyParser = require('body-parser'),
+	  cookieParser = require('cookie-parser'),
+	  fileUpload = require('express-fileupload'),
+	  app = express(),
+	  config_name = 'js-cgi.config',
+	  config = {};
 global.cache = require('cluster-node-cache')(cluster);
+app.use(fileUpload());//for uploading files
 app.use(bodyParser.json()); // for parsing application/json
 app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
 
