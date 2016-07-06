@@ -25,7 +25,7 @@ module.exports = {
 * workers - Number of worker processes. default=2
 
 ####Usage:
-Add a directive to your `nginx.conf` file. I use an "njs" extension on the server javascript files instead of a "js" extension so NGINX won't confuse them with browser javascript files.
+Add a directive to your `nginx.conf` file. Using an "njs" extension on the server javascript files instead of a "js" extension will enable NGINX to distinguish server scripts from browser javascript files.
 ```
 location ~ [^/]\.njs(/|$) {
    proxy_pass   http://localhost:3000;
