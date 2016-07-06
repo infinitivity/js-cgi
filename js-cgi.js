@@ -9,10 +9,11 @@
 * @summary     Javascript CGI process manager
 * @description js-cgi is a javascript CGI process manager, similar to php-fpm, for executing node.js compatible scripts behind NGINX or Apache.
 * @file        js-cgi.js
-* @version     0.2.0
+* @version     0.3.0
 * @author      Darrel Kathan
 * @license     MIT
 * 2/16/16 - Added cluster node cache
+* 7/6/16 - Added script timeout override
 *******************************************/
 'use strict';
 
@@ -40,7 +41,7 @@ app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x
 * input to log file.
 *******************************************/
 var console_log = console.log,
-	console_error = console.error;
+	  console_error = console.error;
 
 console.log = function(){
 	var d = new Date(),
@@ -48,13 +49,12 @@ console.log = function(){
     if(config.output_log){
 		fs.appendFile(config.output_log, log_msg + util.format.apply(this, arguments) + '\n', function(){return;});
 	}
-
-    return console_log.apply(this, arguments);
+  return console_log.apply(this, arguments);
 };
 
 console.error = function(err){
 	var d = new Date(),
-		log_msg = d.toString()+' - ('+process.pid+'): ';
+		  log_msg = d.toString()+' - ('+process.pid+'): ';
 		
 	if(config.output_log){
 		fs.appendFile(config.error_log, log_msg+util.format.apply(this, arguments) +'\n', function(){return;});
@@ -93,7 +93,7 @@ if(fs.existsSync(path.join(__dirname, config_name))){
 * them from cache when they do.
 *******************************************/
 var assert = require('assert').ok,
-	Module = require('module');
+	  Module = require('module');
 if(typeof Module._watching !== 'object'){
 	Module._watching = {};
 }
@@ -149,8 +149,8 @@ if (cluster.isMaster) {
 } else {
 	// the worker
 	var domain = require('domain'),
-		server,
-		d = domain.create();
+		  server,
+		  d = domain.create();
 
 	d.on('error', (er) => {
 		console.error(er);
@@ -198,10 +198,11 @@ if (cluster.isMaster) {
 * handled.
 *******************************************/
 function handleRequest(req, res) {
-	
+	console.log('request:', req);
 	var url_obj = url.parse(req.url, true),
-		file_path;
-	
+	    timeout = config.timeout,
+		  file_path;
+	!req.timeout ? req.timeout = config.timeout : '';
 	/*var cache = [],
     j = JSON.stringify(req, function(key, value) {
       
@@ -256,6 +257,7 @@ function handleRequest(req, res) {
 						console: console,
 						setImmediate: setImmediate,
 						setInterval: setInterval,
+						setTimeout: setTimeout,
 						Buffer: Buffer,
 						JSON: JSON,
 						require: function(name) {
@@ -266,12 +268,35 @@ function handleRequest(req, res) {
 						req: req,
 						res: res,
 						process: process,
-						__dirname: path.dirname(file_path)
+						__dirname: path.dirname(file_path),
+						killtimer: function(){
+						  setTimeout(() => {
+						    var timeout = req.timeout;
+						    if(timeout > 0){
+  						    setTimeout(() => {
+	                  var msg = 'Timeout expired ('+timeout+' ms)',
+	                      err = new Error(msg);
+		                console.error(msg);
+		                return res.send(msg);
+	                }, req.timeout);
+	              }
+	             }, 0);
+	          }
 					};
-					var c = vm.createContext(sandbox);
-          //return vm.runInContext(source, c, {displayErrors: true});
-					//return vm.runInContext('(function(){try{'+source+'}catch(e){console.error(e);return res.status(500).send({error: e.toString(), stack: e.stack});}})();', c, {displayErrors: true, timeout:config.timeout, filename:file_path});
-					return vm.runInContext('function runInContext() {try{'+source+'}catch(e){console.error(e);res.status(500).send({error: e.toString(), stack: e.stack});}} runInContext();', c, file_path);
+					var c = vm.createContext(sandbox),
+					    code = `
+					  function runInContext() {
+					    try{
+					      ${source}
+					    }catch(e){
+					      console.error(e);
+					      res.status(500).send({error: e.toString(), stack: e.stack});
+					    }
+					  }
+					  
+					  runInContext();
+      		  killtimer();`;
+					return vm.runInContext(code, c, file_path);
 				}catch(err){
 					console.error(err);
 					return res.status(500).send({error: err.toString(), stack: err.stack});
