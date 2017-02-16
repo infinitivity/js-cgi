@@ -1,0 +1,36 @@
+{
+  "name": "js-cgi",
+  "version": "0.4.0",
+  "description": "Web Process Manager for Node.js.",
+  "license": "MIT",
+  "homepage": "https://github.com/oracle/js-cgi/",
+  "keywords": [
+    "javascript",
+    "node",
+    "js",
+    "web",
+    "process",
+    "manager"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/oracle/js-cgi.git"
+  },
+  "engines": {
+    "node": ">=0.10.0"
+  },
+   "maintainers": [
+    {
+      "name": "Darrel Kathan",
+      "email": "darrelkathan@gmail.com"
+    }
+  ],
+  "dependencies": {
+    "lodash": ">=1.0.0",
+    "express": ">=4.0.0"
+  },
+  "bugs": {
+    "url": "https://github.com/oracle/js-cgi/issues"
+  },
+  "main": "./js-cgi.js"
+}

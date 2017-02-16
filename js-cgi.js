@@ -9,7 +9,7 @@
 * @summary     Javascript CGI process manager
 * @description js-cgi is a javascript CGI process manager, similar to php-fpm, for executing node.js compatible scripts behind NGINX or Apache.
 * @file        js-cgi.js
-* @version     0.3.0
+* @version     0.4.0
 * @author      Darrel Kathan
 * @license     MIT
 * 2/16/16 - Added cluster node cache
@@ -26,17 +26,18 @@ var cluster = require('cluster'),
 	  util = require('util'),
 	  path = require('path'),
 	  express = require('express'),
-	  bodyParser = require('body-parser'),
-	  cookieParser = require('cookie-parser'),
-	  fileUpload = require('express-fileupload'),
+	  //bodyParser = require('body-parser'),
+	  //cookieParser = require('cookie-parser'),
+	  //fileUpload = require('express-fileupload'),
 	  app = express(),
 	  config_name = 'js-cgi.config',
+	  use_name = 'use.js',
 	  config = {};
-global.cache = require('cluster-node-cache')(cluster);
-app.use(fileUpload());//for uploading files
-app.use(bodyParser.json()); // for parsing application/json
-app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
-
+//global.cache = require('cluster-node-cache')(cluster);
+//app.use(fileUpload());//for uploading files
+//app.use(bodyParser.json()); // for parsing application/json
+//app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
+//app.use(cookieParser());
 /*******************************************
 * Funnel console.log and console.error 
 * input to log file.
@@ -68,7 +69,7 @@ console.error = function(err){
 * Prepare web server to handle cookies and
 * format JSON.
 *******************************************/
-app.use(cookieParser());
+
 app.set('json spaces', 2);
 
 //console.log(config.output_log);
@@ -76,6 +77,17 @@ if(fs.existsSync(path.join(__dirname, config_name))){
 	//Load the congfig file
 	console.log('Loading '+config_name+'...');
 	config = require('./'+config_name);
+}
+
+if(fs.existsSync(path.join(__dirname, use_name))){
+	//Load the congfig file
+	console.log('Loading '+use_name+'...');
+	var mid_ware = require('./'+use_name);
+	if(typeof mid_ware === 'function'){
+	  mid_ware(app);
+	}else{
+	  console.error('Use file is malformed.');
+	}
 }
 
 //Set default config items
@@ -145,7 +157,7 @@ if (cluster.isMaster) {
 	});
 	
 	cluster.on('listening', (worker, address) => {
-	  console.log("A worker is now connected to " + address.address + ":" + address.port);
+	  console.log("A worker is now connected to " + JSON.stringify(address));
 	});
 } else {
 	// the worker
@@ -199,7 +211,7 @@ if (cluster.isMaster) {
 * handled.
 *******************************************/
 function handleRequest(req, res) {
-	console.log('request:', req);
+	//console.log('request:', req);
 	var url_obj = url.parse(req.url, true),
 	    timeout = config.timeout,
 		  file_path;
@@ -225,7 +237,15 @@ function handleRequest(req, res) {
 		   return res.status(401).end();
 		}
 	}
-
+	
+  if(!req.headers.path_translated){
+    req.headers.path_translated = __dirname+'/www';
+    //console.log(req.headers.path_translated);
+    if(!fs.existsSync(req.headers.path_translated)){
+      fs.mkdirSync(req.headers.path_translated);
+    }
+  }
+  
 	if(req.headers.path_translated && url_obj.pathname){
 		file_path = req.headers.path_translated+url_obj.pathname;
 	}else{
