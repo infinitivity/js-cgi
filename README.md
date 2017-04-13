@@ -18,8 +18,8 @@ module.exports = {
 ```
 
 * port - Indicates which TCP port to listen on. default=3000
-* localhostOnly - Prevents non-local agents from invoking scripts. default=true
-* workers - Number of worker processes. default=2
+* localhostOnly - Prevents remote agents from invoking scripts. default=true
+* workers - Number of worker processes. default=the number of processors on the local machine.
 
 ### Usage:
 Add a directive to your `nginx.conf` file. Using an "njs" extension on the server javascript files instead of a "js" extension will enable NGINX to distinguish server scripts from browser javascript files.
