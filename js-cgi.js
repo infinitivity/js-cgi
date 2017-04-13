@@ -321,13 +321,21 @@ function handleRequest(req, res) {
       		         * Capture "res.send" call to
       		         * be able to unset timeout
       		         ***************************/
-      		        var _send = res.send;
+      		        var send = res.send;
+      		        
       		        res.send = function(){
       		          if(timer){
         		          clearTimeout(timer);
         		        }
-      		          return _send.apply(this, arguments);
+      		          return send.apply(this, arguments);
       		        };
+      		        var sendFile = res.sendFile;
+      		        res.sendFile = function(){
+      		          if(timer){
+        		          clearTimeout(timer);
+        		        }
+      		          return sendFile.apply(this, arguments);
+      		        }
 					        runInContext();                                                 //8;
       		        `;
       		      /***************
