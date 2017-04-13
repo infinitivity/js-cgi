@@ -10,7 +10,9 @@
     "js",
     "web",
     "process",
-    "manager"
+    "manager",
+    "cgi",
+    "php-fpm"
   ],
   "repository": {
     "type": "git",
