@@ -1,6 +1,6 @@
 {
   "name": "js-cgi",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Web Process Manager for Node.js.",
   "license": "MIT",
   "homepage": "https://github.com/oracle/js-cgi/",
