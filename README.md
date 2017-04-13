@@ -35,7 +35,7 @@ location ~ [^/]\.njs(/|$) {
 ```
 ### Middleware
 If you want to use express.js middleware, create a "use.js" file and save it to the same folder as the js-cgi app like so:
-```
+```js
 var bodyParser = require('body-parser'),
 	  cookieParser = require('cookie-parser'),
 	  fileUpload = require('express-fileupload');
