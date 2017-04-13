@@ -3,9 +3,6 @@ js-cgi is a javascript CGI process manager, similar to php-fpm, for executing no
 
 ### Dependencies:
 * express.js
-* cookie-parser
-* body-parser
-* express-fileupload
 
 ### Configuration:
 On startup, js-cgi will look for a config file called `js-cgi.config` in the same folder as the js-cgi.js file. If it's not found it will use the defaults.
@@ -34,6 +31,20 @@ location ~ [^/]\.njs(/|$) {
    proxy_set_header Host $http_host;
    proxy_set_header X-NginX-Proxy true;
    proxy_set_header path_translated $document_root$fastcgi_path_info;
+}
+```
+### Middleware
+If you want to use express.js middleware, create a "use.js" file and save it to the same folder as the js-cgi app like so:
+```
+var bodyParser = require('body-parser'),
+	  cookieParser = require('cookie-parser'),
+	  fileUpload = require('express-fileupload');
+
+module.exports = function(app){
+  app.use(fileUpload());//for uploading files
+  app.use(bodyParser.json()); // for parsing application/json
+  app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
+  app.use(cookieParser());// for parsing cookies
 }
 ```
 Once you configure and restart NGINX, you can start js-cgi.
