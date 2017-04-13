@@ -14,6 +14,8 @@
 * @license     MIT
 * 2/16/16 - Added cluster node cache
 * 7/6/16 - Added script timeout override
+* 2/16/17 - Added middleware option
+* 4/13/17 - Major timeout bug fix 
 *******************************************/
 'use strict';
 
@@ -26,20 +28,12 @@ var cluster = require('cluster'),
 	  util = require('util'),
 	  path = require('path'),
 	  express = require('express'),
-	  //bodyParser = require('body-parser'),
-	  //cookieParser = require('cookie-parser'),
-	  //fileUpload = require('express-fileupload'),
 	  app = express(),
 	  config_name = 'js-cgi.config',
 	  use_name = 'use.js',
 	  config = {};
-//global.cache = require('cluster-node-cache')(cluster);
-//app.use(fileUpload());//for uploading files
-//app.use(bodyParser.json()); // for parsing application/json
-//app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
-//app.use(cookieParser());
-/*******************************************
-* Funnel console.log and console.error 
+/******************************************
+* Capture console.log and console.error 
 * input to log file.
 *******************************************/
 var console_log = console.log,
@@ -48,7 +42,7 @@ var console_log = console.log,
 console.log = function(){
 	var d = new Date(),
 		log_msg = d.toString()+' - ('+process.pid+'): ';
-    if(config.output_log){
+  if(config.output_log){
 		fs.appendFile(config.output_log, log_msg + util.format.apply(this, arguments) + '\n', function(){return;});
 	}
   return console_log.apply(this, arguments);
@@ -58,9 +52,11 @@ console.error = function(err){
 	var d = new Date(),
 		  log_msg = d.toString()+' - ('+process.pid+'): ';
 		
-	if(config.output_log){
+	if(config.error_log){
 		fs.appendFile(config.error_log, log_msg+util.format.apply(this, arguments) +'\n', function(){return;});
-		fs.appendFile(config.error_log, err.stack+util.format.apply(this, arguments) +'\n', function(){return;});
+		if(err.stack){
+  		fs.appendFile(config.error_log, err.stack+util.format.apply(this, arguments) +'\n', function(){return;});
+  	}
 	}
 	return console_error.apply(this, arguments);
 };
@@ -165,18 +161,22 @@ if (cluster.isMaster) {
 		  server,
 		  d = domain.create();
 
-	d.on('error', (er) => {
-		console.error(er);
+	d.on('error', (err) => {
+		console.error('Domain Error:', err, err.stack);
+	  //console.trace();
 		try {
 			// make sure we close down if it times out
-			var killtimer = setTimeout(() => {
-				var err = new Error('Killing process. Timeout expired ('+config.timeout+' ms)');
-				console.error(err);
-				return process.exit(1);
-			}, config.timeout);
+			//var killtimer = setTimeout(() => {
+				//var err = new Error('Killing process.');
+				
+				//console.error('Domain Error:', err);
+				//console.trace();
+				console.log('Killing process.')
+				process.exit(1);
+			//}, config.timeout);
 			
 			// But don't keep the process open just for that!
-			killtimer.unref();
+			//killtimer.unref();
 
 			// stop taking new requests.
 			server.close();
@@ -213,9 +213,8 @@ if (cluster.isMaster) {
 function handleRequest(req, res) {
 	//console.log('request:', req);
 	var url_obj = url.parse(req.url, true),
-	    timeout = config.timeout,
 		  file_path;
-	!req.timeout ? req.timeout = config.timeout : '';
+	
 	/*var cache = [],
     j = JSON.stringify(req, function(key, value) {
       
@@ -252,13 +251,10 @@ function handleRequest(req, res) {
 		file_path = url_obj.pathname;
 	}
 	console.log(req.method+': '+file_path);
-	//console.log('file_path:'+file_path);
 	function resolveModule(module) {
 		if (module.charAt(0) !== '.'){
-			//console.log('No need to resolve '+module);
 			return module;
 		}
-		//console.log('Resolved '+module+' to '+path.resolve(path.dirname(file_path), module));
 		return path.resolve(path.dirname(file_path), module);
 	}
 
@@ -274,49 +270,69 @@ function handleRequest(req, res) {
 				try{
 					
 					//console.log(require.cache);
-					var sandbox = {
-						console: console,
-						setImmediate: setImmediate,
-						setInterval: setInterval,
-						setTimeout: setTimeout,
-						Buffer: Buffer,
-						JSON: JSON,
-						require: function(name) {
-							var mod_path = resolveModule(name);
-							//watchRequired(mod_path);
-							return require(mod_path);
-						},
-						req: req,
-						res: res,
-						process: process,
-						__dirname: path.dirname(file_path),
-						killtimer: function(){
-						  setTimeout(() => {
-						    var timeout = req.timeout;
-						    if(timeout > 0){
-  						    setTimeout(() => {
-	                  var msg = 'Timeout expired ('+timeout+' ms)',
-	                      err = new Error(msg);
-		                console.error(msg);
-		                return res.send(msg);
-	                }, req.timeout);
-	              }
-	             }, 0);
-	          }
-					};
-					var c = vm.createContext(sandbox),
-					    code = `
-					  function runInContext() {
-					    try{
-					      ${source}
-					    }catch(e){
-					      console.error(e);
-					      res.status(500).send({error: e.toString(), stack: e.stack});
-					    }
-					  }
-					  
-					  runInContext();
-      		  killtimer();`;
+					//var timer = 'not set';
+    			var sandbox = {
+    						console: console,
+    						setImmediate: setImmediate,
+    						setInterval: setInterval,
+    						setTimeout: setTimeout,
+    						clearTimeout: clearTimeout,
+    						Buffer: Buffer,
+    						JSON: JSON,
+    						require: function(name) {
+    							var mod_path = resolveModule(name);
+    							//watchRequired(mod_path);
+    							return require(mod_path);
+    						},
+    						req: req,
+    						res: res,
+    						process: process,
+    						__dirname: path.dirname(file_path),
+    						setKilltimer: function(){
+    						  !req.timeout ? req.timeout = config.timeout : '';
+    						  var to_start = Date.now();
+  						    var timeout = req.timeout;
+  						    if(timeout > 0){
+    						    return setTimeout(() => {
+  	                  var to_end = Date.now(),
+  	                      msg = 'Timeout expired ('+(to_end-to_start)+' ms) ',
+  	                      err = new Error(msg);
+  		                console.error(err);
+  		                if(!res.headerSent){
+  		                  res.send(msg);
+  		                }
+  		                return
+  	                }, req.timeout);
+  	              }
+    	          }
+    					};
+					  var c = vm.createContext(sandbox);
+					      /*****************
+					       * Start VM Code *
+					       *****************/
+					  var code = `function runInContext() {try{${source}                    //0
+					          }catch(e){                                                    //1
+					            console.error(e);                                           //2
+					            res.status(500).send({error: e.toString(), stack: e.stack});//3
+					          }                                                             //4
+					        }                                                               //5
+					        var timer = setKilltimer();                                     //6
+					        /***************************
+      		         * Capture "res.send" call to
+      		         * be able to unset timeout
+      		         ***************************/
+      		        var _send = res.send;
+      		        res.send = function(){
+      		          if(timer){
+        		          clearTimeout(timer);
+        		        }
+      		          return _send.apply(this, arguments);
+      		        };
+					        runInContext();                                                 //8;
+      		        `;
+      		      /***************
+      		       * End VM Code *
+      		       ***************/
 					return vm.runInContext(code, c, file_path);
 				}catch(err){
 					console.error(err);
