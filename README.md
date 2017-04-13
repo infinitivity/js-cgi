@@ -1,13 +1,13 @@
 # js-cgi  - Javascript CGI process manager
 js-cgi is a javascript CGI process manager, similar to php-fpm, for executing node.js scripts behind NGINX or Apache. Comes in handy if you want to run PHP along side node.js or if you don't want to write your own web server into your node.js application.
 
-###Dependencies:
+### Dependencies:
 * express.js
 * cookie-parser
 * body-parser
 * express-fileupload
 
-###Configuration:
+### Configuration:
 On startup, js-cgi will look for a config file called `js-cgi.config` in the same folder as the js-cgi.js file. If it's not found it will use the defaults.
 
 Example:
@@ -24,7 +24,7 @@ module.exports = {
 * localhostOnly - Prevents non-local agents from invoking scripts. default=true
 * workers - Number of worker processes. default=2
 
-###Usage:
+### Usage:
 Add a directive to your `nginx.conf` file. Using an "njs" extension on the server javascript files instead of a "js" extension will enable NGINX to distinguish server scripts from browser javascript files.
 ```
 location ~ [^/]\.njs(/|$) {
