@@ -299,7 +299,7 @@ function handleRequest(req, res) {
   	                      err = new Error(msg);
   		                console.error(err);
   		                if(!res.headerSent){
-  		                  res.send(msg);
+  		                  res.status(408).send(msg);
   		                }
   		                return
   	                }, req.timeout);
