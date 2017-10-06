@@ -129,7 +129,7 @@ if (typeof Module._watching !== "object") {
 }
 function watchRequired(fn) {
   /*var fs = require('fs')
-		console = console;*/
+    console = console;*/
   //console.log(fn);
   if (Module._watching && !Module._watching.hasOwnProperty(fn)) {
     if (fs.existsSync(fn) && !Module._watching.hasOwnProperty(fn)) {
@@ -340,40 +340,40 @@ function handleRequest(req, res) {
           };
           var c = vm.createContext(sandbox);
           /*****************
-					       * Start VM Code *
-					       *****************/
-          var code = `function runInContext() {try{${source}                    //0
-					          }catch(e){                                                    //1
-					            console.error(e);                                           //2
-					            res.status(500).send({error: e.toString(), stack: e.stack});//3
-					          }                                                             //4
-					        }                                                               //5
-					        var timer//6
-					        /***************************
-      		         * Capture "res.send" call to
-      		         * be able to unset timeout
-      		         ***************************/
-      		        var send = res.send;
-      		        
-      		        res.send = function(){
-      		          if(timer){
-        		          clearTimeout(timer);
-        		        }
-      		          return send.apply(this, arguments);
-      		        };
-      		        var sendFile = res.sendFile;
-      		        res.sendFile = function(){
-      		          if(timer){
-        		          clearTimeout(timer);
-        		        }
-      		          return sendFile.apply(this, arguments);
-      		        }
-					        runInContext();                                                 //8;
-					        timer = setKilltimer();//Set the kill timer after the script so the script can set the timeout                                     
-      		        `;
+           * Start VM Code *
+           *****************/
+          var code = `function runInContext() {try{${source}                      //0
+                    }catch(e){                                                    //1
+                      console.error(e);                                           //2
+                      res.status(500).send({error: e.toString(), stack: e.stack});//3
+                    }                                                             //4
+                  }                                                               //5
+                  var timer//6
+                  /***************************
+                   * Capture "res.send" call to
+                   * be able to unset timeout
+                   ***************************/
+                  var send = res.send;
+                  
+                  res.send = function(){
+                    if(timer){
+                      clearTimeout(timer);
+                    }
+                    return send.apply(this, arguments);
+                  };
+                  var sendFile = res.sendFile;
+                  res.sendFile = function(){
+                    if(timer){
+                      clearTimeout(timer);
+                    }
+                    return sendFile.apply(this, arguments);
+                  }
+                  runInContext();                                                 //8;
+                  timer = setKilltimer();//Set the kill timer after the script so the script can set the timeout                                     
+                  `;
           /***************
-      		       * End VM Code *
-      		       ***************/
+          * End VM Code *
+          ***************/
           return vm.runInContext(code, c, file_path);
         } catch (err) {
           console.error(err);
