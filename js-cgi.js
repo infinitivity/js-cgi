@@ -297,84 +297,98 @@ function handleRequest(req, res) {
         try {
           //console.log(require.cache);
           //var timer = 'not set';
-          var sandbox = {
-            console: console,
-            setImmediate: setImmediate,
-            setInterval: setInterval,
-            setTimeout: setTimeout,
-            clearTimeout: clearTimeout,
-            Buffer: Buffer,
-            JSON: JSON,
-            require: function(name) {
-              var mod_path = resolveModule(name);
-              //watchRequired(mod_path);
-              return require(mod_path);
-            },
-            req: req,
-            res: res,
-            process: process,
-            __dirname: path.dirname(file_path),
-            setKilltimer: function() {
-              !req.timeout ? (req.timeout = config.timeout) : "";
-              var to_start = Date.now();
-              var timeout = req.timeout;
-              if (timeout > 0) {
-                return setTimeout(() => {
-                  var to_end = Date.now(),
-                    msg =
-                      "Timeout expired (" +
-                      (to_end - to_start) +
-                      " ms) for " +
-                      file_path,
-                    err;
-
-                  //if(!res.headerSent){
-                  res.status(408).send(msg);
-                  //}
-                  //err = new Error(msg);
-                  console.error(msg);
-                  return;
-                }, req.timeout);
-              }
+          req.timeout = config.timeout;
+          var timer,
+              sandbox = {
+                console: console,
+                setImmediate: setImmediate,
+                setInterval: setInterval,
+                setTimeout: setTimeout,
+                clearTimeout: clearTimeout,
+                Buffer: Buffer,
+                JSON: JSON,
+                require: function(name) {
+                  var mod_path = resolveModule(name);
+                  //watchRequired(mod_path);
+                  return require(mod_path);
+                },
+                req: req,
+                res: res,
+                process: process,
+                __dirname: path.dirname(file_path)
+              },
+              setKilltimer = function() {
+                //!req.timeout ? (req.timeout = config.timeout) : "";
+                var to_start = Date.now();
+                var timeout = req.timeout;
+                if (timeout > 0) {
+                  return setTimeout(() => {
+                    var to_end = Date.now(),
+                        msg =
+                          "Timeout expired (" +
+                          (to_end - to_start) +
+                          " ms) for " +
+                          file_path,
+                        err;
+  
+                    //if(!res.headerSent){
+                    res.status(408).send(msg);
+                    //}
+                    //err = new Error(msg);
+                    console.error(msg);
+                    return;
+                  }, req.timeout);
+                }
+              };
+          /****************************
+          * Capture "res.send" and 
+          * "res.sendFile" calls to
+          * be able to unset timeout
+          * when the script ends. */
+          var send = res.send;
+          res.send = function(){
+            if(timer){
+              console.log('timeout cleared');
+              clearTimeout(timer);
             }
+            return send.apply(this, arguments);
           };
-          var c = vm.createContext(sandbox);
+          var sendFile = res.sendFile;
+          res.sendFile = function(){
+            if(timer){
+              console.log('timeout cleared');
+              clearTimeout(timer);
+            }
+            return sendFile.apply(this, arguments);
+          }
+          /***************************/
+
           /*****************
            * Start VM Code *
            *****************/
-          var code = `function runInContext() {try{${source}                      //0
-                    }catch(e){                                                    //1
-                      console.error(e);                                           //2
-                      res.status(500).send({error: e.toString(), stack: e.stack});//3
-                    }                                                             //4
-                  }                                                               //5
-                  var timer//6
-                  /***************************
-                   * Capture "res.send" call to
-                   * be able to unset timeout
-                   ***************************/
-                  var send = res.send;
-                  
-                  res.send = function(){
-                    if(timer){
-                      clearTimeout(timer);
-                    }
-                    return send.apply(this, arguments);
-                  };
-                  var sendFile = res.sendFile;
-                  res.sendFile = function(){
-                    if(timer){
-                      clearTimeout(timer);
-                    }
-                    return sendFile.apply(this, arguments);
-                  }
-                  runInContext();                                                 //8;
-                  timer = setKilltimer();//Set the kill timer after the script so the script can set the timeout                                     
-                  `;
+          var c = vm.createContext(sandbox),
+              code = `function runInContext() {try{${source}                          //0
+                          if(typeof cgi === 'function'){                              //1
+                            cgi(req, res);                                            //2
+                          }                                                           //3
+                        }catch(e){                                                    //4
+                          console.error(e);                                           //5
+                          res.status(500).send({error: e.toString(), stack: e.stack});//6
+                        }                                                             //7
+                      }                                                               //8
+                                                                                      //9
+                      runInContext();`;
           /***************
           * End VM Code *
           ***************/
-          return vm.runInContext(code, c, file_path);
+
+          /***************************************************
+           * Set the kill timer after executing the script so 
+           * the script can set the timeout duration.
+           ***************************************************/
+          var result = vm.runInContext(code, c, file_path);
+          timer = setKilltimer();
+          return result;
         } catch (err) {
           console.error(err);
           return res
