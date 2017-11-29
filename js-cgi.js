@@ -9,13 +9,14 @@
 * @summary     Javascript CGI process manager
 * @description js-cgi is a javascript CGI process manager, similar to php-fpm, for executing node.js compatible scripts behind NGINX or Apache.
 * @file        js-cgi.js
-* @version     0.4.0
+* @version     1.0.0
 * @author      Darrel Kathan
 * @license     MIT
 * 2/16/16 - Added cluster node cache
 * 7/6/16 - Added script timeout override
 * 2/16/17 - Added middleware option
 * 4/13/17 - Major timeout bug fix 
+* 11/3/17 - Added cgi function
 *******************************************/
 "use strict";
 
