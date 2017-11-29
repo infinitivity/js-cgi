@@ -9,7 +9,7 @@
 * @summary     Javascript CGI process manager
 * @description js-cgi is a javascript CGI process manager, similar to php-fpm, for executing node.js compatible scripts behind NGINX or Apache.
 * @file        js-cgi.js
-* @version     1.0.0
+* @version     1.1.1
 * @author      Darrel Kathan
 * @license     MIT
 * 2/16/16 - Added cluster node cache
@@ -17,6 +17,7 @@
 * 2/16/17 - Added middleware option
 * 4/13/17 - Major timeout bug fix 
 * 11/3/17 - Added cgi function
+* 11/29/17 - Added path_info
 *******************************************/
 "use strict";
 
@@ -235,8 +236,8 @@ if (cluster.isMaster) {
 function handleRequest(req, res) {
   //console.log('request:', req);
   var url_obj = url.parse(req.url, true),
-    file_path;
-
+      file_path;
+  console.log(req.headers);
   /*var cache = [],
     j = JSON.stringify(req, function(key, value) {
       
@@ -263,6 +264,7 @@ function handleRequest(req, res) {
     }
   }
 
+  //Set to the directory path
   if (!req.headers.path_translated) {
     req.headers.path_translated = __dirname + "/www";
     //console.log(req.headers.path_translated);
@@ -271,7 +273,10 @@ function handleRequest(req, res) {
     }
   }
 
-  if (req.headers.path_translated && url_obj.pathname) {
+  //
+  if(req.headers.path_translated && req.headers.script_name)
+    file_path = req.headers.path_translated + req.headers.script_name;
+  else if (req.headers.path_translated && url_obj.pathname) {
     file_path = req.headers.path_translated + url_obj.pathname;
   } else {
     file_path = url_obj.pathname;
