@@ -321,7 +321,8 @@ function handleRequest(req, res) {
                 req: req,
                 res: res,
                 process: process,
-                __dirname: path.dirname(file_path)
+                __dirname: path.dirname(file_path),
+                __filename: path.basename(file_path)
               },
               setKilltimer = function() {
                 //!req.timeout ? (req.timeout = config.timeout) : "";
