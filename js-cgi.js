@@ -20,7 +20,7 @@
 * 11/29/17 - Added path_info
 *******************************************/
 "use strict";
-
+process.title = 'js-cgi';
 var cluster = require("cluster"),
   _ = require("lodash"),
   url = require("url"),
